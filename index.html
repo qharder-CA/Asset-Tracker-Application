@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Asset Tracker</title>
+<link rel="manifest" id="manifest-link" href="data:application/json,">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap');
+
+  :root{
+    --bg:#F0F1F4;
+    --surface:#FFFFFF;
+    --ink:#181B20;
+    --muted:#6B7280;
+    --muted-2:#9CA3AF;
+    --border:#E2E4E9;
+    --accent:#DD8B1F;
+    --accent-ink:#5A3B0A;
+    --accent-soft:#FCEDD4;
+    --good:#1E8E71;
+    --good-soft:#E1F5EE;
+    --bad:#C0392B;
+    --bad-soft:#FBEAE8;
+    --radius:14px;
+    --shadow:0 1px 2px rgba(20,20,30,.04), 0 8px 24px -12px rgba(20,20,30,.12);
+    font-family:'Inter',system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);height:100%;-webkit-tap-highlight-color:transparent;}
+  body{min-height:100dvh;display:flex;flex-direction:column;}
+  .mono{font-family:'IBM Plex Mono',ui-monospace,monospace;}
+  button{font-family:inherit;}
+  ::selection{background:var(--accent-soft);}
+
+  /* ---------- top bar ---------- */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 18px;background:var(--surface);border-bottom:1px solid var(--border);
+    position:sticky;top:0;z-index:20;
+  }
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand-mark{
+    width:32px;height:32px;border-radius:8px;background:var(--ink);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  }
+  .brand-mark svg{width:18px;height:18px;}
+  .brand-name{font-weight:800;font-size:16px;letter-spacing:-.01em;}
+  .brand-sub{font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase;}
+  .topbar-actions{display:flex;align-items:center;gap:8px;}
+  .icon-btn{
+    width:38px;height:38px;border-radius:10px;border:1px solid var(--border);background:var(--surface);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);
+  }
+  .icon-btn:active{background:var(--bg);}
+  .pill{
+    display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--muted);
+    padding:6px 10px;border-radius:999px;background:var(--bg);border:1px solid var(--border);
+  }
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--muted-2);}
+  .dot.on{background:var(--good);}
+
+  /* ---------- main ---------- */
+  main{flex:1;display:flex;flex-direction:column;max-width:720px;width:100%;margin:0 auto;padding:20px 18px 100px;}
+  .screen{display:none;flex-direction:column;gap:16px;animation:rise .28s ease both;}
+  .screen.active{display:flex;}
+  @keyframes rise{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+
+  h1{font-size:22px;margin:4px 0 0;letter-spacing:-.01em;}
+  h2{font-size:17px;margin:0;letter-spacing:-.01em;}
+  p.lead{color:var(--muted);font-size:14px;line-height:1.5;margin:0;}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;}
+
+  /* Big action tiles on home screen */
+  .actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px;}
+  @media (max-width:480px){.actions{grid-template-columns:1fr;}}
+  .action-tile{
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:22px 18px;text-align:left;cursor:pointer;box-shadow:var(--shadow);
+    display:flex;flex-direction:column;gap:10px;transition:transform .12s ease, border-color .12s ease;
+  }
+  .action-tile:active{transform:scale(.98);}
+  .action-tile.primary{background:var(--ink);border-color:var(--ink);}
+  .action-tile.primary .tile-title, .action-tile.primary .tile-desc{color:#fff;}
+  .action-tile.primary .tile-desc{color:#B9BCC4;}
+  .tile-icon{
+    width:40px;height:40px;border-radius:10px;background:var(--accent-soft);color:var(--accent-ink);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .action-tile.primary .tile-icon{background:var(--accent);color:#241300;}
+  .tile-title{font-weight:700;font-size:15px;}
+  .tile-desc{font-size:12.5px;color:var(--muted);line-height:1.4;}
+
+  /* Recent list */
+  .section-label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-2);margin:8px 2px 0;}
+
+  /* Asset tag card - signature element */
+  .tag{
+    position:relative;display:flex;align-items:center;gap:14px;background:var(--surface);
+    border:1px solid var(--border);border-radius:10px;padding:14px 16px 14px 20px;cursor:pointer;
+    box-shadow:var(--shadow);
+  }
+  .tag:active{background:var(--bg);}
+  .tag::before{
+    content:"";position:absolute;left:-1px;top:50%;transform:translateY(-50%);
+    width:14px;height:14px;border-radius:50%;background:var(--bg);border:1px solid var(--border);
+  }
+  .tag-name{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:14px;letter-spacing:.01em;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .tag-meta{font-size:11px;color:var(--muted-2);flex-shrink:0;}
+  .tag-arrow{color:var(--muted-2);flex-shrink:0;}
+  .tag-list{display:flex;flex-direction:column;gap:8px;}
+
+  /* Forms */
+  label.field-label{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:7px;}
+  input[type=text], input[type=url]{
+    width:100%;padding:13px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;
+    font-family:'IBM Plex Mono',monospace;background:var(--bg);color:var(--ink);outline:none;
+  }
+  input[type=text]:focus, input[type=url]:focus{border-color:var(--accent);background:var(--surface);}
+  input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);}
+  .field{margin-bottom:16px;}
+  .field:last-child{margin-bottom:0;}
+  .hint{font-size:12px;color:var(--muted-2);margin-top:6px;line-height:1.4;}
+
+  .btn{
+    border:none;border-radius:10px;padding:14px 20px;font-weight:700;font-size:14.5px;cursor:pointer;
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;
+  }
+  .btn:active{transform:scale(.985);}
+  .btn:disabled{opacity:.45;pointer-events:none;}
+  .btn-primary{background:var(--ink);color:#fff;}
+  .btn-accent{background:var(--accent);color:#241300;}
+  .btn-ghost{background:transparent;color:var(--muted);border:1.5px solid var(--border);}
+  .btn-row{display:flex;gap:10px;}
+  .btn-row .btn{width:auto;flex:1;}
+
+  .back-row{display:flex;align-items:center;gap:10px;margin-bottom:2px;}
+  .back-btn{
+    width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--surface);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;
+  }
+  .crumb{font-size:12px;color:var(--muted);font-weight:600;}
+  .crumb b{color:var(--ink);font-family:'IBM Plex Mono',monospace;}
+
+  /* Capture screen */
+  .capture-header{
+    display:flex;align-items:center;justify-content:space-between;background:var(--surface);
+    border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow);
+  }
+  .capture-header .tag-name{font-size:16px;}
+  .capture-count{font-size:12px;color:var(--muted);font-weight:600;}
+
+  .shutter-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:14px 0 4px;}
+  .shutter{
+    width:82px;height:82px;border-radius:50%;background:var(--ink);border:5px solid var(--surface);
+    outline:2px solid var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;
+    box-shadow:var(--shadow);
+  }
+  .shutter svg{width:28px;height:28px;color:#fff;}
+  .shutter:active{transform:scale(.94);}
+  .shutter-label{font-size:12.5px;color:var(--muted);font-weight:600;}
+
+  .photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+  .photo-cell{
+    position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--bg);
+    border:1px solid var(--border);
+  }
+  .photo-cell img{width:100%;height:100%;object-fit:cover;display:block;}
+  .photo-status{
+    position:absolute;bottom:5px;right:5px;width:22px;height:22px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;
+  }
+  .photo-status.uploading{background:rgba(24,27,32,.75);}
+  .photo-status.done{background:var(--good);}
+  .photo-status.error{background:var(--bad);}
+  .spin{width:11px;height:11px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .empty-photos{
+    text-align:center;padding:34px 10px;color:var(--muted-2);font-size:13px;border:1.5px dashed var(--border);border-radius:12px;
+  }
+
+  /* Search results */
+  .search-box{position:relative;}
+  .search-box input{padding-left:40px;}
+  .search-icon{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--muted-2);}
+  .load-more{text-align:center;padding:10px;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;}
+
+  /* Toasts */
+  #toast-host{position:fixed;bottom:20px;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:8px;z-index:100;pointer-events:none;}
+  .toast{
+    background:var(--ink);color:#fff;padding:11px 18px;border-radius:999px;font-size:13px;font-weight:600;
+    box-shadow:var(--shadow);animation:toastin .2s ease;max-width:90vw;
+  }
+  .toast.bad{background:var(--bad);}
+  .toast.good{background:var(--good);}
+  @keyframes toastin{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+
+  .signin-wrap{display:flex;flex-direction:column;align-items:center;text-align:center;gap:18px;padding:60px 10px 20px;}
+  .signin-mark{width:64px;height:64px;border-radius:16px;background:var(--ink);display:flex;align-items:center;justify-content:center;}
+  .signin-mark svg{width:34px;height:34px;}
+
+  .footer-note{text-align:center;font-size:11.5px;color:var(--muted-2);padding:14px 0 4px;}
+  a.link{color:var(--accent-ink);font-weight:600;text-decoration:none;}
+
+  .spinner-lg{width:22px;height:22px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+    </div>
+    <div>
+      <div class="brand-name">Asset Tracker</div>
+      <div class="brand-sub" id="drive-target-label">Field capture</div>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <div class="pill" id="conn-pill"><span class="dot" id="conn-dot"></span><span id="conn-text">Signed out</span></div>
+    <div class="icon-btn" id="settings-btn" title="Settings">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.36a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.64 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.64 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.64a1.7 1.7 0 0 0 1-1.55V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.36 9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/></svg>
+    </div>
+  </div>
+</div>
+
+<main>
+
+  <!-- SETUP SCREEN -->
+  <section class="screen" id="screen-setup">
+    <h1>Set up Drive connection</h1>
+    <p class="lead">This runs once per device. Ask your Drive/IT admin for these three values — see the included setup guide for how to generate them.</p>
+    <div class="card">
+      <div class="field">
+        <label class="field-label">Google OAuth Client ID</label>
+        <input type="text" id="cfg-client-id" placeholder="xxxxxxxxxx-xxxxxxxx.apps.googleusercontent.com">
+        <div class="hint">From Google Cloud Console → APIs &amp; Services → Credentials.</div>
+      </div>
+      <div class="field">
+        <label class="field-label">Parent folder ID (where new assets are created)</label>
+        <input type="text" id="cfg-parent-id" placeholder="1AbCdeFGhijKLmNoPQRstuVWxyz">
+        <div class="hint">The long ID from the folder's Drive URL: drive.google.com/drive/folders/<b>THIS PART</b></div>
+      </div>
+      <div class="field">
+        <label class="field-label" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <input type="checkbox" id="cfg-use-shared-drive"> Assets live on a Shared Drive
+        </label>
+        <input type="text" id="cfg-drive-id" placeholder="Shared Drive ID (optional)">
+        <div class="hint">Only needed if the folder above lives inside a Shared Drive, not My Drive.</div>
+      </div>
+      <div class="field">
+        <label class="field-label">Team / site name (shown in header, optional)</label>
+        <input type="text" id="cfg-label" placeholder="e.g. Phoenix Yard">
+      </div>
+      <button class="btn btn-accent" id="save-config-btn">Save and continue</button>
+    </div>
+    <div class="footer-note">Values are stored only on this device (localStorage) — nothing is sent anywhere but Google Drive.</div>
+  </section>
+
+  <!-- SIGN IN SCREEN -->
+  <section class="screen" id="screen-signin">
+    <div class="signin-wrap">
+      <div class="signin-mark">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+      <div>
+        <h1>Sign in to Drive</h1>
+        <p class="lead">Use your company Google account. Access is scoped to the asset folders your account already has permission to see.</p>
+      </div>
+      <button class="btn btn-primary" style="width:auto;padding:14px 26px;" id="signin-btn">Sign in with Google</button>
+    </div>
+  </section>
+
+  <!-- HOME SCREEN -->
+  <section class="screen" id="screen-home">
+    <div>
+      <h1>New photos to log?</h1>
+      <p class="lead">Start a new asset or add to one that already exists.</p>
+    </div>
+    <div class="actions">
+      <div class="action-tile primary" id="tile-new">
+        <div class="tile-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></div>
+        <div><div class="tile-title">Create new asset</div><div class="tile-desc">Name it, then start shooting photos straight into its own folder.</div></div>
+      </div>
+      <div class="action-tile" id="tile-search">
+        <div class="tile-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
+        <div><div class="tile-title">Add to existing asset</div><div class="tile-desc">Find a folder that's already been created and drop more photos in.</div></div>
+      </div>
+    </div>
+    <div class="section-label">Recently opened on this device</div>
+    <div class="tag-list" id="recent-list"></div>
+  </section>
+
+  <!-- NEW ASSET NAME SCREEN -->
+  <section class="screen" id="screen-new">
+    <div class="back-row"><div class="back-btn" data-back="home"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></div><span class="crumb">New asset</span></div>
+    <div class="card">
+      <div class="field">
+        <label class="field-label">Asset name</label>
+        <input type="text" id="new-asset-name" placeholder="e.g. FORKLIFT-014" autocomplete="off">
+        <div class="hint">This becomes the folder name in Drive. Use your site's naming convention.</div>
+      </div>
+      <button class="btn btn-accent" id="create-asset-btn">Create folder &amp; start shooting</button>
+    </div>
+  </section>
+
+  <!-- SEARCH SCREEN -->
+  <section class="screen" id="screen-search">
+    <div class="back-row"><div class="back-btn" data-back="home"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></div><span class="crumb">Find existing asset</span></div>
+    <div class="search-box">
+      <span class="search-icon"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span>
+      <input type="text" id="search-input" placeholder="Search asset folders…" autocomplete="off">
+    </div>
+    <div class="tag-list" id="search-results"></div>
+  </section>
+
+  <!-- CAPTURE SCREEN -->
+  <section class="screen" id="screen-capture">
+    <div class="back-row"><div class="back-btn" data-back="home"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></div><span class="crumb">Adding photos to</span></div>
+    <div class="capture-header">
+      <span class="tag-name mono" id="capture-asset-name">—</span>
+      <span class="capture-count" id="capture-count">0 photos</span>
+    </div>
+    <div class="shutter-wrap">
+      <div class="shutter" id="shutter-btn">
+        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="7"/></svg>
+      </div>
+      <div class="shutter-label">Tap to take a photo</div>
+    </div>
+    <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none">
+    <div id="photo-grid-wrap">
+      <div class="empty-photos" id="empty-photos">No photos yet for this asset. Tap the shutter above.</div>
+      <div class="photo-grid" id="photo-grid" style="display:none;"></div>
+    </div>
+    <button class="btn btn-primary" id="done-btn">Done with this asset</button>
+  </section>
+
+</main>
+
+<div id="toast-host"></div>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- config / storage ---------------- */
+  const CFG_KEY = "assetTracker.config.v1";
+  const RECENT_KEY = "assetTracker.recent.v1";
+
+  function loadConfig(){
+    try{ return JSON.parse(localStorage.getItem(CFG_KEY) || "null"); }catch(e){ return null; }
+  }
+  function saveConfig(cfg){ localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); }
+  function loadRecent(){
+    try{ return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); }catch(e){ return []; }
+  }
+  function saveRecent(list){ localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0,10))); }
+  function addRecent(folder){
+    const list = loadRecent().filter(f => f.id !== folder.id);
+    list.unshift(folder);
+    saveRecent(list);
+  }
+
+  let config = loadConfig();
+  let tokenClient = null;
+  let accessToken = null;
+  let tokenExpiry = 0;
+  let currentFolder = null; // {id, name}
+  let photos = []; // {localId, name, dataUrl, status, driveId}
+
+  const $ = (id) => document.getElementById(id);
+
+  /* ---------------- toast ---------------- */
+  function toast(msg, kind){
+    const host = $("toast-host");
+    const el = document.createElement("div");
+    el.className = "toast" + (kind ? " " + kind : "");
+    el.textContent = msg;
+    host.appendChild(el);
+    setTimeout(() => el.remove(), 3400);
+  }
+
+  function esc(str){
+    const d = document.createElement("div");
+    d.textContent = str == null ? "" : String(str);
+    return d.innerHTML;
+  }
+
+  /* ---------------- screen routing ---------------- */
+  function show(id){
+    document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+    $(id).classList.add("active");
+  }
+  document.querySelectorAll("[data-back]").forEach(btn=>{
+    btn.addEventListener("click", ()=> routeHome());
+  });
+  function routeHome(){
+    renderRecent();
+    show("screen-home");
+  }
+
+  /* ---------------- connection pill ---------------- */
+  function setConnected(on){
+    $("conn-dot").classList.toggle("on", on);
+    $("conn-text").textContent = on ? "Connected" : "Signed out";
+  }
+
+  /* ---------------- settings / setup ---------------- */
+  $("settings-btn").addEventListener("click", ()=>{
+    fillSetupForm();
+    show("screen-setup");
+  });
+  function fillSetupForm(){
+    const c = config || {};
+    $("cfg-client-id").value = c.clientId || "";
+    $("cfg-parent-id").value = c.parentId || "";
+    $("cfg-use-shared-drive").checked = !!c.useSharedDrive;
+    $("cfg-drive-id").value = c.driveId || "";
+    $("cfg-label").value = c.label || "";
+  }
+  $("save-config-btn").addEventListener("click", ()=>{
+    const clientId = $("cfg-client-id").value.trim();
+    const parentId = $("cfg-parent-id").value.trim();
+    const useSharedDrive = $("cfg-use-shared-drive").checked;
+    const driveId = $("cfg-drive-id").value.trim();
+    const label = $("cfg-label").value.trim();
+    if(!clientId || !parentId){
+      toast("Client ID and parent folder ID are required", "bad");
+      return;
+    }
+    config = { clientId, parentId, useSharedDrive, driveId, label };
+    saveConfig(config);
+    $("drive-target-label").textContent = label || "Field capture";
+    toast("Settings saved", "good");
+    initAuth();
+  });
+
+  /* ---------------- Google auth ---------------- */
+  function initAuth(){
+    if(!config || !config.clientId){
+      show("screen-setup");
+      return;
+    }
+    if($("drive-target-label")) $("drive-target-label").textContent = config.label || "Field capture";
+    if(!window.google || !google.accounts){
+      // GIS script not ready yet, retry shortly
+      setTimeout(initAuth, 250);
+      return;
+    }
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: config.clientId,
+      scope: "https://www.googleapis.com/auth/drive",
+      prompt: "",
+      callback: (resp)=>{
+        if(resp.error){
+          toast("Sign-in failed: " + resp.error, "bad");
+          return;
+        }
+        accessToken = resp.access_token;
+        tokenExpiry = Date.now() + (resp.expires_in ? resp.expires_in*1000 : 3000*1000) - 60000;
+        setConnected(true);
+        routeHome();
+      }
+    });
+    show("screen-signin");
+  }
+  $("signin-btn").addEventListener("click", ()=>{
+    if(!tokenClient){ toast("Still loading Google sign-in…", "bad"); return; }
+    tokenClient.requestAccessToken({ prompt: accessToken ? "" : "consent" });
+  });
+
+  function ensureToken(){
+    return new Promise((resolve, reject)=>{
+      if(accessToken && Date.now() < tokenExpiry){ resolve(accessToken); return; }
+      if(!tokenClient){ reject(new Error("Not signed in")); return; }
+      const prevCallback = tokenClient.callback;
+      tokenClient.callback = (resp)=>{
+        tokenClient.callback = prevCallback;
+        if(resp.error){ reject(new Error(resp.error)); return; }
+        accessToken = resp.access_token;
+        tokenExpiry = Date.now() + (resp.expires_in ? resp.expires_in*1000 : 3000*1000) - 60000;
+        setConnected(true);
+        resolve(accessToken);
+      };
+      tokenClient.requestAccessToken({ prompt: "" });
+    });
+  }
+
+  /* ---------------- Drive API helpers ---------------- */
+  const DRIVE_FILES = "https://www.googleapis.com/drive/v3/files";
+  const DRIVE_UPLOAD = "https://www.googleapis.com/upload/drive/v3/files";
+
+  function driveShareParams(){
+    const p = new URLSearchParams();
+    p.set("supportsAllDrives", "true");
+    if(config.useSharedDrive && config.driveId){
+      p.set("includeItemsFromAllDrives", "true");
+      p.set("corpora", "drive");
+      p.set("driveId", config.driveId);
+    }
+    return p;
+  }
+
+  async function apiFetch(url, options){
+    const token = await ensureToken();
+    options = options || {};
+    options.headers = Object.assign({}, options.headers, { Authorization: "Bearer " + token });
+    const res = await fetch(url, options);
+    if(res.status === 401){
+      accessToken = null;
+      const token2 = await ensureToken();
+      options.headers.Authorization = "Bearer " + token2;
+      return fetch(url, options);
+    }
+    return res;
+  }
+
+  async function createFolder(name){
+    const params = driveShareParams();
+    const res = await apiFetch(DRIVE_FILES + "?" + params.toString(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: name,
+        mimeType: "application/vnd.google-apps.folder",
+        parents: [config.parentId]
+      })
+    });
+    if(!res.ok){ throw new Error("Could not create folder (" + res.status + ")"); }
+    return res.json();
+  }
+
+  function escapeForQuery(str){
+    return str.replace(/[\\']/g, "\\$&");
+  }
+
+  async function searchFolders(term, pageToken){
+    const params = driveShareParams();
+    let q = "mimeType='application/vnd.google-apps.folder' and trashed=false and '" + config.parentId + "' in parents";
+    if(term && term.trim()){
+      q += " and name contains '" + escapeForQuery(term.trim()) + "'";
+    }
+    params.set("q", q);
+    params.set("fields", "nextPageToken, files(id, name, modifiedTime)");
+    params.set("orderBy", "modifiedTime desc");
+    params.set("pageSize", "25");
+    if(pageToken) params.set("pageToken", pageToken);
+    const res = await apiFetch(DRIVE_FILES + "?" + params.toString());
+    if(!res.ok){ throw new Error("Search failed (" + res.status + ")"); }
+    return res.json();
+  }
+
+  async function uploadPhotoToFolder(file, folderId){
+    const params = new URLSearchParams({ uploadType: "multipart", supportsAllDrives: "true" });
+    const metadata = { name: file.name, parents: [folderId] };
+    const boundary = "assettracker" + Math.random().toString(16).slice(2);
+    const meta = JSON.stringify(metadata);
+    const arrayBuffer = await file.arrayBuffer();
+    const encoder = new TextEncoder();
+    const head = encoder.encode(
+      "--" + boundary + "\r\n" +
+      "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
+      meta + "\r\n" +
+      "--" + boundary + "\r\n" +
+      "Content-Type: " + (file.type || "image/jpeg") + "\r\n\r\n"
+    );
+    const tail = encoder.encode("\r\n--" + boundary + "--");
+    const body = new Blob([head, arrayBuffer, tail]);
+    const res = await apiFetch(DRIVE_UPLOAD + "?" + params.toString(), {
+      method: "POST",
+      headers: { "Content-Type": "multipart/related; boundary=" + boundary },
+      body: body
+    });
+    if(!res.ok){ throw new Error("Upload failed (" + res.status + ")"); }
+    return res.json();
+  }
+
+  /* ---------------- home / recent ---------------- */
+  function renderRecent(){
+    const list = loadRecent();
+    const host = $("recent-list");
+    host.innerHTML = "";
+    if(!list.length){
+      host.innerHTML = '<div class="empty-photos">Assets you open will show up here for quick re-access.</div>';
+      return;
+    }
+    list.forEach(f=>{
+      const el = document.createElement("div");
+      el.className = "tag";
+      el.innerHTML = '<span class="tag-name">'+esc(f.name)+'</span><span class="tag-arrow">→</span>';
+      el.addEventListener("click", ()=> openCapture(f));
+      host.appendChild(el);
+    });
+  }
+
+  /* ---------------- new asset flow ---------------- */
+  $("tile-new").addEventListener("click", ()=>{
+    $("new-asset-name").value = "";
+    show("screen-new");
+    setTimeout(()=> $("new-asset-name").focus(), 200);
+  });
+  $("create-asset-btn").addEventListener("click", async ()=>{
+    const name = $("new-asset-name").value.trim();
+    if(!name){ toast("Give the asset a name first", "bad"); return; }
+    const btn = $("create-asset-btn");
+    btn.disabled = true; btn.textContent = "Creating folder…";
+    try{
+      const folder = await createFolder(name);
+      addRecent({ id: folder.id, name: folder.name });
+      toast("Asset folder created", "good");
+      openCapture({ id: folder.id, name: folder.name });
+    }catch(err){
+      toast(err.message || "Could not create folder", "bad");
+    }finally{
+      btn.disabled = false; btn.textContent = "Create folder & start shooting";
+    }
+  });
+
+  /* ---------------- search flow ---------------- */
+  let searchTimer = null;
+  let lastPageToken = null;
+  $("tile-search").addEventListener("click", ()=>{
+    $("search-input").value = "";
+    $("search-results").innerHTML = "";
+    show("screen-search");
+    runSearch("");
+    setTimeout(()=> $("search-input").focus(), 200);
+  });
+  $("search-input").addEventListener("input", (e)=>{
+    clearTimeout(searchTimer);
+    const term = e.target.value;
+    searchTimer = setTimeout(()=> runSearch(term), 320);
+  });
+  async function runSearch(term, pageToken){
+    const host = $("search-results");
+    if(!pageToken) host.innerHTML = '<div class="spinner-lg"></div>';
+    try{
+      const data = await searchFolders(term, pageToken);
+      if(!pageToken) host.innerHTML = "";
+      if((!data.files || !data.files.length) && !pageToken){
+        host.innerHTML = '<div class="empty-photos">No matching asset folders. Check the spelling, or create a new asset instead.</div>';
+        return;
+      }
+      (data.files||[]).forEach(f=>{
+        const el = document.createElement("div");
+        el.className = "tag";
+        el.innerHTML = '<span class="tag-name">'+esc(f.name)+'</span><span class="tag-arrow">→</span>';
+        el.addEventListener("click", ()=>{
+          addRecent({ id: f.id, name: f.name });
+          openCapture({ id: f.id, name: f.name });
+        });
+        host.appendChild(el);
+      });
+      lastPageToken = data.nextPageToken;
+      const oldMore = host.querySelector(".load-more");
+      if(oldMore) oldMore.remove();
+      if(lastPageToken){
+        const more = document.createElement("div");
+        more.className = "load-more";
+        more.textContent = "Load more results";
+        more.addEventListener("click", ()=> runSearch(term, lastPageToken));
+        host.appendChild(more);
+      }
+    }catch(err){
+      host.innerHTML = "";
+      toast(err.message || "Search failed", "bad");
+    }
+  }
+
+  /* ---------------- capture flow ---------------- */
+  function openCapture(folder){
+    currentFolder = folder;
+    photos = [];
+    $("capture-asset-name").textContent = folder.name;
+    renderPhotoGrid();
+    show("screen-capture");
+  }
+  $("shutter-btn").addEventListener("click", ()=> $("camera-input").click());
+  $("camera-input").addEventListener("change", async (e)=>{
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    for(const file of files){
+      const localId = "p" + Math.random().toString(16).slice(2);
+      const reader = new FileReader();
+      const dataUrl = await new Promise(res=>{ reader.onload = ()=> res(reader.result); reader.readAsDataURL(file); });
+      const record = { localId, name: file.name, dataUrl, status: "uploading" };
+      photos.unshift(record);
+      renderPhotoGrid();
+      uploadPhotoToFolder(file, currentFolder.id).then(()=>{
+        record.status = "done";
+        renderPhotoGrid();
+      }).catch(err=>{
+        record.status = "error";
+        renderPhotoGrid();
+        toast("A photo failed to upload — tap it to retry", "bad");
+      });
+      record._file = file;
+    }
+  });
+  function renderPhotoGrid(){
+    $("capture-count").textContent = photos.length + (photos.length===1 ? " photo" : " photos");
+    const grid = $("photo-grid");
+    const empty = $("empty-photos");
+    if(!photos.length){
+      grid.style.display = "none";
+      empty.style.display = "block";
+      return;
+    }
+    empty.style.display = "none";
+    grid.style.display = "grid";
+    grid.innerHTML = "";
+    photos.forEach(p=>{
+      const cell = document.createElement("div");
+      cell.className = "photo-cell";
+      const statusHtml = p.status === "uploading"
+        ? '<div class="photo-status uploading"><div class="spin"></div></div>'
+        : p.status === "error"
+          ? '<div class="photo-status error">!</div>'
+          : '<div class="photo-status done">✓</div>';
+      cell.innerHTML = '<img src="'+p.dataUrl+'">' + statusHtml;
+      if(p.status === "error"){
+        cell.addEventListener("click", ()=>{
+          p.status = "uploading";
+          renderPhotoGrid();
+          uploadPhotoToFolder(p._file, currentFolder.id).then(()=>{ p.status="done"; renderPhotoGrid(); })
+            .catch(()=>{ p.status="error"; renderPhotoGrid(); toast("Still failing — check your connection", "bad"); });
+        });
+      }
+      grid.appendChild(cell);
+    });
+  }
+  $("done-btn").addEventListener("click", ()=>{
+    const pending = photos.some(p=>p.status==="uploading");
+    if(pending){ toast("Still uploading — hang tight a moment", "bad"); return; }
+    routeHome();
+  });
+
+  /* ---------------- boot ---------------- */
+  (function boot(){
+    if(!config || !config.clientId || !config.parentId){
+      show("screen-setup");
+    }else{
+      $("drive-target-label").textContent = config.label || "Field capture";
+      // wait for GIS script
+      const check = setInterval(()=>{
+        if(window.google && google.accounts){
+          clearInterval(check);
+          initAuth();
+        }
+      }, 150);
+    }
+  })();
+
+})();
+</script>
+</body>
+</html>
