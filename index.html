@@ -270,9 +270,9 @@
         <div class="hint">Shown in the app when you're switching between projects.</div>
       </div>
       <div class="field">
-        <label class="field-label">Parent folder ID (where new assets are created)</label>
+        <label class="field-label">Parent folder ID (optional)</label>
         <input type="text" id="proj-parent-id" placeholder="1AbCdeFGhijKLmNoPQRstuVWxyz">
-        <div class="hint">The long ID from the folder's Drive URL: drive.google.com/drive/folders/<b>THIS PART</b></div>
+        <div class="hint">Leave blank to create assets at the top level of My Drive (or the Shared Drive itself, if checked below). Otherwise paste the ID from the folder's Drive URL: drive.google.com/drive/folders/<b>THIS PART</b></div>
       </div>
       <div class="field">
         <label class="field-label" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
@@ -641,7 +641,7 @@
     const parentId = $("proj-parent-id").value.trim();
     const useSharedDrive = $("proj-use-shared-drive").checked;
     const driveId = $("proj-drive-id").value.trim();
-    if(!name || !parentId){ toast("Project name and parent folder ID are required", "bad"); return; }
+    if(!name){ toast("Project name is required", "bad"); return; }
     config = config || {};
     config.projects = config.projects || [];
     if(editingProjectId){
@@ -779,6 +779,15 @@
     return p;
   }
 
+  // A project can leave the parent folder blank to mean "the top level" —
+  // for My Drive that's the literal alias 'root'; for a Shared Drive, the
+  // top level's ID is the Shared Drive's own ID.
+  function resolveParentId(proj){
+    if(proj.parentId) return proj.parentId;
+    if(proj.useSharedDrive && proj.driveId) return proj.driveId;
+    return "root";
+  }
+
   async function apiFetch(url, options){
     const token = await ensureToken();
     options = options || {};
@@ -803,7 +812,7 @@
       body: JSON.stringify({
         name: name,
         mimeType: "application/vnd.google-apps.folder",
-        parents: [proj.parentId]
+        parents: [resolveParentId(proj)]
       })
     });
     if(!res.ok){ throw new Error("Could not create folder (" + res.status + ")"); }
@@ -818,7 +827,7 @@
     const proj = getActiveProject();
     if(!proj) throw new Error("No project selected — add one in Settings");
     const params = driveShareParams();
-    let q = "mimeType='application/vnd.google-apps.folder' and trashed=false and '" + proj.parentId + "' in parents";
+    let q = "mimeType='application/vnd.google-apps.folder' and trashed=false and '" + resolveParentId(proj) + "' in parents";
     if(term && term.trim()){
       q += " and name contains '" + escapeForQuery(term.trim()) + "'";
     }
