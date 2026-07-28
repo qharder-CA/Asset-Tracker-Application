@@ -95,6 +95,16 @@
   /* Recent list */
   .section-label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-2);margin:8px 2px 0;}
 
+  /* Active project chip on home screen */
+  .project-chip{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    background:var(--surface);border:1px solid var(--border);border-radius:10px;
+    padding:12px 14px;cursor:pointer;box-shadow:var(--shadow);
+  }
+  .project-chip-label{font-size:11px;color:var(--muted-2);font-weight:700;text-transform:uppercase;letter-spacing:.06em;}
+  .project-chip-name{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:14.5px;margin-top:2px;}
+  .project-chip-switch{font-size:12px;font-weight:700;color:var(--accent-ink);background:var(--accent-soft);padding:6px 10px;border-radius:999px;flex-shrink:0;}
+
   /* Asset tag card - signature element */
   .tag{
     position:relative;display:flex;align-items:center;gap:14px;background:var(--surface);
@@ -174,6 +184,7 @@
   .photo-status.uploading{background:rgba(24,27,32,.75);}
   .photo-status.done{background:var(--good);}
   .photo-status.error{background:var(--bad);}
+  .photo-status.queued{background:var(--accent);color:#241300;}
   .spin{width:11px;height:11px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;}
   @keyframes spin{to{transform:rotate(360deg);}}
   .empty-photos{
@@ -219,6 +230,7 @@
     </div>
   </div>
   <div class="topbar-actions">
+    <div class="pill" id="pending-pill" style="display:none;cursor:pointer;" title="Tap to sync now"><span class="dot" style="background:var(--accent);"></span><span id="pending-text">0 pending</span></div>
     <div class="pill" id="conn-pill"><span class="dot" id="conn-dot"></span><span id="conn-text">Signed out</span></div>
     <div class="icon-btn" id="settings-btn" title="Settings">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.36a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.64 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.64 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.64a1.7 1.7 0 0 0 1-1.55V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.36 9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/></svg>
@@ -231,32 +243,56 @@
   <!-- SETUP SCREEN -->
   <section class="screen" id="screen-setup">
     <h1>Set up Drive connection</h1>
-    <p class="lead">This runs once per device. Ask your Drive/IT admin for these three values — see the included setup guide for how to generate them.</p>
+    <p class="lead">The Client ID is one-time, shared by every project. Each project below points at its own Drive folder — add one per job site or client.</p>
     <div class="card">
       <div class="field">
         <label class="field-label">Google OAuth Client ID</label>
         <input type="text" id="cfg-client-id" placeholder="xxxxxxxxxx-xxxxxxxx.apps.googleusercontent.com">
         <div class="hint">From Google Cloud Console → APIs &amp; Services → Credentials.</div>
       </div>
+      <button class="btn btn-accent" id="save-config-btn">Save Client ID</button>
+    </div>
+
+    <div class="section-label">Projects</div>
+    <div class="tag-list" id="project-list"></div>
+    <button class="btn btn-ghost" id="add-project-btn">+ Add a project</button>
+
+    <div class="footer-note">Values are stored only on this device (localStorage) — nothing is sent anywhere but Google Drive.</div>
+  </section>
+
+  <!-- PROJECT EDIT SCREEN -->
+  <section class="screen" id="screen-project-edit">
+    <div class="back-row"><div class="back-btn" id="back-to-setup-btn"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></div><span class="crumb" id="project-edit-crumb">Add project</span></div>
+    <div class="card">
+      <div class="field">
+        <label class="field-label">Project name</label>
+        <input type="text" id="proj-name" placeholder="e.g. Phoenix Site">
+        <div class="hint">Shown in the app when you're switching between projects.</div>
+      </div>
       <div class="field">
         <label class="field-label">Parent folder ID (where new assets are created)</label>
-        <input type="text" id="cfg-parent-id" placeholder="1AbCdeFGhijKLmNoPQRstuVWxyz">
+        <input type="text" id="proj-parent-id" placeholder="1AbCdeFGhijKLmNoPQRstuVWxyz">
         <div class="hint">The long ID from the folder's Drive URL: drive.google.com/drive/folders/<b>THIS PART</b></div>
       </div>
       <div class="field">
         <label class="field-label" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-          <input type="checkbox" id="cfg-use-shared-drive"> Assets live on a Shared Drive
+          <input type="checkbox" id="proj-use-shared-drive"> Assets live on a Shared Drive
         </label>
-        <input type="text" id="cfg-drive-id" placeholder="Shared Drive ID (optional)">
+        <input type="text" id="proj-drive-id" placeholder="Shared Drive ID (optional)">
         <div class="hint">Only needed if the folder above lives inside a Shared Drive, not My Drive.</div>
       </div>
-      <div class="field">
-        <label class="field-label">Team / site name (shown in header, optional)</label>
-        <input type="text" id="cfg-label" placeholder="e.g. Phoenix Yard">
+      <div class="btn-row">
+        <button class="btn btn-ghost" id="delete-project-btn" style="display:none;color:var(--bad);border-color:var(--bad-soft);">Delete</button>
+        <button class="btn btn-accent" id="save-project-btn">Save project</button>
       </div>
-      <button class="btn btn-accent" id="save-config-btn">Save and continue</button>
     </div>
-    <div class="footer-note">Values are stored only on this device (localStorage) — nothing is sent anywhere but Google Drive.</div>
+  </section>
+
+  <!-- SWITCH PROJECT SCREEN -->
+  <section class="screen" id="screen-projects">
+    <div class="back-row"><div class="back-btn" data-back="home"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></div><span class="crumb">Switch project</span></div>
+    <div class="tag-list" id="project-switch-list"></div>
+    <button class="btn btn-ghost" id="manage-projects-btn">Manage projects</button>
   </section>
 
   <!-- SIGN IN SCREEN -->
@@ -278,6 +314,10 @@
     <div>
       <h1>New photos to log?</h1>
       <p class="lead">Start a new asset or add to one that already exists.</p>
+    </div>
+    <div class="project-chip" id="project-chip">
+      <div><div class="project-chip-label">Active project</div><div class="project-chip-name" id="active-project-name">—</div></div>
+      <div class="project-chip-switch">Switch</div>
     </div>
     <div class="actions">
       <div class="action-tile primary" id="tile-new">
@@ -328,8 +368,11 @@
         <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="7"/></svg>
       </div>
       <div class="shutter-label">Tap to take a photo</div>
+      <button class="btn btn-ghost" id="library-btn" style="width:auto;padding:10px 16px;margin-top:2px;">Add multiple from Photos</button>
     </div>
     <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none">
+    <input type="file" id="library-input" accept="image/*" multiple style="display:none">
+    <div class="hint" style="text-align:center;margin-top:-6px;">No signal right now? Keep shooting — photos queue on this device and upload automatically once you're back in range.</div>
     <div id="photo-grid-wrap">
       <div class="empty-photos" id="empty-photos">No photos yet for this asset. Tap the shutter above.</div>
       <div class="photo-grid" id="photo-grid" style="display:none;"></div>
@@ -351,17 +394,44 @@
   const RECENT_KEY = "assetTracker.recent.v1";
 
   function loadConfig(){
-    try{ return JSON.parse(localStorage.getItem(CFG_KEY) || "null"); }catch(e){ return null; }
+    let c;
+    try{ c = JSON.parse(localStorage.getItem(CFG_KEY) || "null"); }catch(e){ c = null; }
+    if(c && !c.projects){
+      // migrate from the old single-parent-folder shape
+      const proj = { id: "proj_default", name: c.label || "Default project", parentId: c.parentId, useSharedDrive: !!c.useSharedDrive, driveId: c.driveId || "" };
+      c = { clientId: c.clientId, projects: proj.parentId ? [proj] : [], activeProjectId: proj.parentId ? proj.id : null };
+      saveConfig(c);
+    }
+    return c;
   }
   function saveConfig(cfg){ localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); }
-  function loadRecent(){
-    try{ return JSON.parse(localStorage.getItem(RECENT_KEY) || "[]"); }catch(e){ return []; }
+  function getActiveProject(){
+    if(!config || !config.projects) return null;
+    return config.projects.find(p=>p.id===config.activeProjectId) || config.projects[0] || null;
   }
-  function saveRecent(list){ localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0,10))); }
+  function loadRecentMap(){
+    let raw;
+    try{ raw = JSON.parse(localStorage.getItem(RECENT_KEY) || "{}"); }catch(e){ raw = {}; }
+    if(Array.isArray(raw)){
+      const proj = getActiveProject();
+      raw = proj ? { [proj.id]: raw } : {};
+    }
+    return raw;
+  }
+  function saveRecentMap(map){ localStorage.setItem(RECENT_KEY, JSON.stringify(map)); }
+  function loadRecent(){
+    const proj = getActiveProject();
+    if(!proj) return [];
+    return (loadRecentMap()[proj.id] || []);
+  }
   function addRecent(folder){
-    const list = loadRecent().filter(f => f.id !== folder.id);
+    const proj = getActiveProject();
+    if(!proj) return;
+    const map = loadRecentMap();
+    const list = (map[proj.id] || []).filter(f => f.id !== folder.id);
     list.unshift(folder);
-    saveRecent(list);
+    map[proj.id] = list.slice(0,10);
+    saveRecentMap(map);
   }
 
   let config = loadConfig();
@@ -372,6 +442,112 @@
   let photos = []; // {localId, name, dataUrl, status, driveId}
 
   const $ = (id) => document.getElementById(id);
+
+  /* ---------------- offline queue (IndexedDB) ----------------
+     Every photo is written here BEFORE an upload is attempted, so a photo
+     is never lost even if the tab is closed, the device loses power, or
+     there's no signal at all. Rows are deleted only once Drive confirms
+     the upload. */
+  const DB_NAME = "assetTrackerDB";
+  const STORE = "pending";
+  let dbPromise = null;
+  function openDB(){
+    if(dbPromise) return dbPromise;
+    dbPromise = new Promise((resolve, reject)=>{
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = ()=>{
+        req.result.createObjectStore(STORE, { keyPath: "id" });
+      };
+      req.onsuccess = ()=> resolve(req.result);
+      req.onerror = ()=> reject(req.error);
+    });
+    return dbPromise;
+  }
+  async function dbPut(record){
+    const db = await openDB();
+    return new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).put(record);
+      tx.oncomplete = ()=> resolve();
+      tx.onerror = ()=> reject(tx.error);
+    });
+  }
+  async function dbDelete(id){
+    const db = await openDB();
+    return new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).delete(id);
+      tx.oncomplete = ()=> resolve();
+      tx.onerror = ()=> reject(tx.error);
+    });
+  }
+  async function dbGetAll(){
+    const db = await openDB();
+    return new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE, "readonly");
+      const req = tx.objectStore(STORE).getAll();
+      req.onsuccess = ()=> resolve(req.result || []);
+      req.onerror = ()=> reject(req.error);
+    });
+  }
+
+  let flushing = false;
+  async function updatePendingPill(){
+    let count = 0;
+    try{ count = (await dbGetAll()).length; }catch(e){ /* ignore */ }
+    const pill = $("pending-pill");
+    if(count > 0){
+      pill.style.display = "flex";
+      $("pending-text").textContent = count + (count===1 ? " pending" : " pending");
+    }else{
+      pill.style.display = "none";
+    }
+    return count;
+  }
+
+  async function flushQueue(){
+    if(flushing || !navigator.onLine) return;
+    flushing = true;
+    try{
+      const rows = await dbGetAll();
+      for(const row of rows){
+        try{
+          await uploadPhotoToFolder(row.blob, row.folderId, row.fileName);
+          await dbDelete(row.id);
+          if(currentFolder && row.folderId === currentFolder.id){
+            const match = photos.find(p=>p.localId===row.id);
+            if(match){ match.status = "done"; }
+          }
+        }catch(err){
+          // still failing (offline again, or a real error) — leave it queued and stop this pass
+          break;
+        }
+      }
+    } finally {
+      flushing = false;
+      await updatePendingPill();
+      renderPhotoGrid();
+    }
+  }
+  window.addEventListener("online", flushQueue);
+  setInterval(flushQueue, 20000);
+  $("pending-pill").addEventListener("click", ()=>{
+    if(!navigator.onLine){ toast("Still offline — will sync once you're back in range", "bad"); return; }
+    toast("Syncing…");
+    flushQueue();
+  });
+
+  function slugForName(name){
+    return String(name).trim().replace(/[^a-z0-9\-_. ]/gi, "").replace(/\s+/g, "_") || "asset";
+  }
+  function uniqueFileName(folderName, mimeType){
+    const ext = (mimeType && mimeType.split("/")[1]) ? mimeType.split("/")[1].replace("jpeg","jpg") : "jpg";
+    const now = new Date();
+    const stamp = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,"0") + "-" + String(now.getDate()).padStart(2,"0")
+      + "_" + String(now.getHours()).padStart(2,"0") + String(now.getMinutes()).padStart(2,"0") + String(now.getSeconds()).padStart(2,"0");
+    const rand = Math.random().toString(16).slice(2,6);
+    return slugForName(folderName) + "_" + stamp + "_" + rand + "." + ext;
+  }
 
   /* ---------------- toast ---------------- */
   function toast(msg, kind){
@@ -399,6 +575,7 @@
   });
   function routeHome(){
     renderRecent();
+    refreshActiveProjectUI();
     show("screen-home");
   }
 
@@ -408,34 +585,131 @@
     $("conn-text").textContent = on ? "Connected" : "Signed out";
   }
 
-  /* ---------------- settings / setup ---------------- */
+  /* ---------------- settings / setup / projects ---------------- */
   $("settings-btn").addEventListener("click", ()=>{
     fillSetupForm();
     show("screen-setup");
   });
   function fillSetupForm(){
-    const c = config || {};
-    $("cfg-client-id").value = c.clientId || "";
-    $("cfg-parent-id").value = c.parentId || "";
-    $("cfg-use-shared-drive").checked = !!c.useSharedDrive;
-    $("cfg-drive-id").value = c.driveId || "";
-    $("cfg-label").value = c.label || "";
+    $("cfg-client-id").value = (config && config.clientId) || "";
+    renderProjectList();
+  }
+  function renderProjectList(){
+    const host = $("project-list");
+    host.innerHTML = "";
+    const projects = (config && config.projects) || [];
+    if(!projects.length){
+      host.innerHTML = '<div class="empty-photos">No projects yet — add one below to point at a Drive folder.</div>';
+      return;
+    }
+    projects.forEach(p=>{
+      const el = document.createElement("div");
+      el.className = "tag";
+      const isActive = config.activeProjectId === p.id;
+      el.innerHTML = '<span class="tag-name">'+esc(p.name)+(isActive ? ' • active' : '')+'</span><span class="tag-arrow">edit ›</span>';
+      el.addEventListener("click", ()=> openProjectEdit(p.id));
+      host.appendChild(el);
+    });
   }
   $("save-config-btn").addEventListener("click", ()=>{
     const clientId = $("cfg-client-id").value.trim();
-    const parentId = $("cfg-parent-id").value.trim();
-    const useSharedDrive = $("cfg-use-shared-drive").checked;
-    const driveId = $("cfg-drive-id").value.trim();
-    const label = $("cfg-label").value.trim();
-    if(!clientId || !parentId){
-      toast("Client ID and parent folder ID are required", "bad");
+    if(!clientId){ toast("Client ID is required", "bad"); return; }
+    config = config || { projects: [], activeProjectId: null };
+    config.clientId = clientId;
+    if(!config.projects) config.projects = [];
+    saveConfig(config);
+    toast("Client ID saved", "good");
+    if(config.projects.length){ initAuth(); }
+  });
+
+  let editingProjectId = null;
+  function openProjectEdit(id){
+    editingProjectId = id;
+    const proj = id ? (config.projects || []).find(p=>p.id===id) : null;
+    $("project-edit-crumb").textContent = proj ? "Edit project" : "Add project";
+    $("proj-name").value = proj ? proj.name : "";
+    $("proj-parent-id").value = proj ? proj.parentId : "";
+    $("proj-use-shared-drive").checked = proj ? !!proj.useSharedDrive : false;
+    $("proj-drive-id").value = proj ? (proj.driveId || "") : "";
+    $("delete-project-btn").style.display = proj ? "inline-flex" : "none";
+    show("screen-project-edit");
+  }
+  $("add-project-btn").addEventListener("click", ()=> openProjectEdit(null));
+  $("back-to-setup-btn").addEventListener("click", ()=>{ fillSetupForm(); show("screen-setup"); });
+  $("save-project-btn").addEventListener("click", ()=>{
+    const name = $("proj-name").value.trim();
+    const parentId = $("proj-parent-id").value.trim();
+    const useSharedDrive = $("proj-use-shared-drive").checked;
+    const driveId = $("proj-drive-id").value.trim();
+    if(!name || !parentId){ toast("Project name and parent folder ID are required", "bad"); return; }
+    config = config || {};
+    config.projects = config.projects || [];
+    if(editingProjectId){
+      const proj = config.projects.find(p=>p.id===editingProjectId);
+      Object.assign(proj, { name, parentId, useSharedDrive, driveId });
+    }else{
+      const id = "proj_" + Date.now().toString(16) + Math.random().toString(16).slice(2);
+      config.projects.push({ id, name, parentId, useSharedDrive, driveId });
+      if(!config.activeProjectId) config.activeProjectId = id;
+    }
+    saveConfig(config);
+    toast("Project saved", "good");
+    refreshActiveProjectUI();
+    fillSetupForm();
+    show("screen-setup");
+    if(config.clientId) initAuth();
+  });
+  $("delete-project-btn").addEventListener("click", ()=>{
+    if(!editingProjectId) return;
+    if(!confirm("Delete this project? This only removes it from this device — nothing is deleted in Drive.")) return;
+    config.projects = (config.projects || []).filter(p=>p.id!==editingProjectId);
+    if(config.activeProjectId === editingProjectId){
+      config.activeProjectId = config.projects[0] ? config.projects[0].id : null;
+    }
+    saveConfig(config);
+    toast("Project deleted", "good");
+    refreshActiveProjectUI();
+    fillSetupForm();
+    show("screen-setup");
+  });
+
+  function refreshActiveProjectUI(){
+    const proj = getActiveProject();
+    const name = proj ? proj.name : "No project set";
+    $("drive-target-label").textContent = name;
+    const chipName = $("active-project-name");
+    if(chipName) chipName.textContent = name;
+  }
+  $("project-chip").addEventListener("click", ()=>{
+    renderProjectSwitchList();
+    show("screen-projects");
+  });
+  function renderProjectSwitchList(){
+    const host = $("project-switch-list");
+    host.innerHTML = "";
+    const projects = (config && config.projects) || [];
+    if(!projects.length){
+      host.innerHTML = '<div class="empty-photos">No projects configured yet — add one in Manage projects below.</div>';
       return;
     }
-    config = { clientId, parentId, useSharedDrive, driveId, label };
-    saveConfig(config);
-    $("drive-target-label").textContent = label || "Field capture";
-    toast("Settings saved", "good");
-    initAuth();
+    projects.forEach(p=>{
+      const el = document.createElement("div");
+      el.className = "tag";
+      const isActive = config.activeProjectId === p.id;
+      el.innerHTML = '<span class="tag-name">'+esc(p.name)+(isActive ? ' • active' : '')+'</span><span class="tag-arrow">'+(isActive ? '✓' : '→')+'</span>';
+      el.addEventListener("click", ()=>{
+        config.activeProjectId = p.id;
+        saveConfig(config);
+        refreshActiveProjectUI();
+        toast("Switched to " + p.name, "good");
+        routeHome();
+      });
+      host.appendChild(el);
+    });
+  }
+  $("manage-projects-btn").addEventListener("click", ()=>{
+    fillSetupForm();
+    show("screen-setup");
   });
 
   /* ---------------- Google auth ---------------- */
@@ -444,7 +718,7 @@
       show("screen-setup");
       return;
     }
-    if($("drive-target-label")) $("drive-target-label").textContent = config.label || "Field capture";
+    refreshActiveProjectUI();
     if(!window.google || !google.accounts){
       // GIS script not ready yet, retry shortly
       setTimeout(initAuth, 250);
@@ -494,12 +768,13 @@
   const DRIVE_UPLOAD = "https://www.googleapis.com/upload/drive/v3/files";
 
   function driveShareParams(){
+    const proj = getActiveProject();
     const p = new URLSearchParams();
     p.set("supportsAllDrives", "true");
-    if(config.useSharedDrive && config.driveId){
+    if(proj && proj.useSharedDrive && proj.driveId){
       p.set("includeItemsFromAllDrives", "true");
       p.set("corpora", "drive");
-      p.set("driveId", config.driveId);
+      p.set("driveId", proj.driveId);
     }
     return p;
   }
@@ -519,6 +794,8 @@
   }
 
   async function createFolder(name){
+    const proj = getActiveProject();
+    if(!proj) throw new Error("No project selected — add one in Settings");
     const params = driveShareParams();
     const res = await apiFetch(DRIVE_FILES + "?" + params.toString(), {
       method: "POST",
@@ -526,7 +803,7 @@
       body: JSON.stringify({
         name: name,
         mimeType: "application/vnd.google-apps.folder",
-        parents: [config.parentId]
+        parents: [proj.parentId]
       })
     });
     if(!res.ok){ throw new Error("Could not create folder (" + res.status + ")"); }
@@ -538,8 +815,10 @@
   }
 
   async function searchFolders(term, pageToken){
+    const proj = getActiveProject();
+    if(!proj) throw new Error("No project selected — add one in Settings");
     const params = driveShareParams();
-    let q = "mimeType='application/vnd.google-apps.folder' and trashed=false and '" + config.parentId + "' in parents";
+    let q = "mimeType='application/vnd.google-apps.folder' and trashed=false and '" + proj.parentId + "' in parents";
     if(term && term.trim()){
       q += " and name contains '" + escapeForQuery(term.trim()) + "'";
     }
@@ -553,9 +832,9 @@
     return res.json();
   }
 
-  async function uploadPhotoToFolder(file, folderId){
+  async function uploadPhotoToFolder(file, folderId, fileName){
     const params = new URLSearchParams({ uploadType: "multipart", supportsAllDrives: "true" });
-    const metadata = { name: file.name, parents: [folderId] };
+    const metadata = { name: fileName || file.name, parents: [folderId] };
     const boundary = "assettracker" + Math.random().toString(16).slice(2);
     const meta = JSON.stringify(metadata);
     const arrayBuffer = await file.arrayBuffer();
@@ -598,6 +877,7 @@
 
   /* ---------------- new asset flow ---------------- */
   $("tile-new").addEventListener("click", ()=>{
+    if(!getActiveProject()){ toast("Add a project first", "bad"); fillSetupForm(); show("screen-setup"); return; }
     $("new-asset-name").value = "";
     show("screen-new");
     setTimeout(()=> $("new-asset-name").focus(), 200);
@@ -623,6 +903,7 @@
   let searchTimer = null;
   let lastPageToken = null;
   $("tile-search").addEventListener("click", ()=>{
+    if(!getActiveProject()){ toast("Add a project first", "bad"); fillSetupForm(); show("screen-setup"); return; }
     $("search-input").value = "";
     $("search-results").innerHTML = "";
     show("screen-search");
@@ -677,29 +958,63 @@
     $("capture-asset-name").textContent = folder.name;
     renderPhotoGrid();
     show("screen-capture");
+    loadQueuedForFolder(folder.id);
   }
-  $("shutter-btn").addEventListener("click", ()=> $("camera-input").click());
-  $("camera-input").addEventListener("change", async (e)=>{
-    const files = Array.from(e.target.files || []);
-    e.target.value = "";
-    for(const file of files){
-      const localId = "p" + Math.random().toString(16).slice(2);
-      const reader = new FileReader();
-      const dataUrl = await new Promise(res=>{ reader.onload = ()=> res(reader.result); reader.readAsDataURL(file); });
-      const record = { localId, name: file.name, dataUrl, status: "uploading" };
-      photos.unshift(record);
-      renderPhotoGrid();
-      uploadPhotoToFolder(file, currentFolder.id).then(()=>{
-        record.status = "done";
-        renderPhotoGrid();
-      }).catch(err=>{
-        record.status = "error";
-        renderPhotoGrid();
-        toast("A photo failed to upload — tap it to retry", "bad");
+  // If this folder already has photos waiting from an earlier offline session, show them.
+  async function loadQueuedForFolder(folderId){
+    try{
+      const rows = await dbGetAll();
+      rows.filter(r=>r.folderId===folderId).forEach(row=>{
+        photos.push({ localId: row.id, dataUrl: row.dataUrl, status: "queued" });
       });
-      record._file = file;
+      renderPhotoGrid();
+    }catch(e){ /* ignore */ }
+  }
+
+  $("shutter-btn").addEventListener("click", ()=> $("camera-input").click());
+  $("library-btn").addEventListener("click", ()=> $("library-input").click());
+  $("camera-input").addEventListener("change", (e)=> handleNewFiles(e.target.files, e.target));
+  $("library-input").addEventListener("change", (e)=> handleNewFiles(e.target.files, e.target));
+
+  async function handleNewFiles(fileList, inputEl){
+    const files = Array.from(fileList || []);
+    inputEl.value = "";
+    for(const file of files){
+      await queueAndUpload(file);
     }
-  });
+  }
+
+  async function queueAndUpload(file){
+    const localId = "p" + Date.now().toString(16) + Math.random().toString(16).slice(2);
+    const fileName = uniqueFileName(currentFolder.name, file.type);
+    const reader = new FileReader();
+    const dataUrl = await new Promise(res=>{ reader.onload = ()=> res(reader.result); reader.readAsDataURL(file); });
+
+    // Save to durable storage FIRST, before ever attempting a network call —
+    // this is what makes a photo survive a closed tab or a dead zone.
+    await dbPut({ id: localId, folderId: currentFolder.id, folderName: currentFolder.name, fileName, blob: file, dataUrl });
+    await updatePendingPill();
+
+    const record = { localId, dataUrl, status: navigator.onLine ? "uploading" : "queued" };
+    photos.unshift(record);
+    renderPhotoGrid();
+
+    if(!navigator.onLine){ return; }
+    attemptUpload(record, file, fileName, currentFolder.id);
+  }
+
+  function attemptUpload(record, file, fileName, folderId){
+    uploadPhotoToFolder(file, folderId, fileName).then(async ()=>{
+      await dbDelete(record.localId);
+      await updatePendingPill();
+      record.status = "done";
+      renderPhotoGrid();
+    }).catch(()=>{
+      record.status = "queued";
+      renderPhotoGrid();
+    });
+  }
+
   function renderPhotoGrid(){
     $("capture-count").textContent = photos.length + (photos.length===1 ? " photo" : " photos");
     const grid = $("photo-grid");
@@ -717,33 +1032,37 @@
       cell.className = "photo-cell";
       const statusHtml = p.status === "uploading"
         ? '<div class="photo-status uploading"><div class="spin"></div></div>'
-        : p.status === "error"
-          ? '<div class="photo-status error">!</div>'
-          : '<div class="photo-status done">✓</div>';
+        : p.status === "queued"
+          ? '<div class="photo-status queued" title="Waiting for a connection">⏳</div>'
+          : p.status === "error"
+            ? '<div class="photo-status error">!</div>'
+            : '<div class="photo-status done">✓</div>';
       cell.innerHTML = '<img src="'+p.dataUrl+'">' + statusHtml;
-      if(p.status === "error"){
-        cell.addEventListener("click", ()=>{
-          p.status = "uploading";
-          renderPhotoGrid();
-          uploadPhotoToFolder(p._file, currentFolder.id).then(()=>{ p.status="done"; renderPhotoGrid(); })
-            .catch(()=>{ p.status="error"; renderPhotoGrid(); toast("Still failing — check your connection", "bad"); });
+      if(p.status === "queued"){
+        cell.addEventListener("click", async ()=>{
+          if(!navigator.onLine){ toast("Still offline", "bad"); return; }
+          toast("Retrying…");
+          flushQueue();
         });
       }
       grid.appendChild(cell);
     });
   }
   $("done-btn").addEventListener("click", ()=>{
-    const pending = photos.some(p=>p.status==="uploading");
-    if(pending){ toast("Still uploading — hang tight a moment", "bad"); return; }
     routeHome();
   });
 
   /* ---------------- boot ---------------- */
   (function boot(){
-    if(!config || !config.clientId || !config.parentId){
+    updatePendingPill().then(()=>{ if(navigator.onLine) flushQueue(); });
+    if("serviceWorker" in navigator){
+      navigator.serviceWorker.register("./sw.js").catch(()=>{ /* offline app-shell caching is a bonus, not required */ });
+    }
+    if(!config || !config.clientId || !config.projects || !config.projects.length){
+      fillSetupForm();
       show("screen-setup");
     }else{
-      $("drive-target-label").textContent = config.label || "Field capture";
+      refreshActiveProjectUI();
       // wait for GIS script
       const check = setInterval(()=>{
         if(window.google && google.accounts){
