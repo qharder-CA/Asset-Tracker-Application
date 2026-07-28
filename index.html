@@ -245,10 +245,10 @@
     <h1>Set up Drive connection</h1>
     <p class="lead">The Client ID is one-time, shared by every project. Each project below points at its own Drive folder — add one per job site or client.</p>
     <div class="card">
-      <div class="field">
+      <div class="field" id="client-id-field">
         <label class="field-label">Google OAuth Client ID</label>
         <input type="text" id="cfg-client-id" placeholder="xxxxxxxxxx-xxxxxxxx.apps.googleusercontent.com">
-        <div class="hint">From Google Cloud Console → APIs &amp; Services → Credentials.</div>
+        <div class="hint" id="client-id-hint">From Google Cloud Console → APIs &amp; Services → Credentials.</div>
       </div>
       <button class="btn btn-accent" id="save-config-btn">Save Client ID</button>
     </div>
@@ -389,6 +389,16 @@
 (function(){
   "use strict";
 
+  /* =========================================================================
+     ADMIN: paste your Google OAuth Client ID below (between the quotes) and
+     redeploy. Once this is set, EVERY device that opens the app picks it up
+     automatically — nobody ever has to type or paste a Client ID by hand,
+     which removes the single biggest source of "OAuth client not found"
+     sign-in errors. Leave it blank ("") to require manual entry per device
+     instead.
+     ========================================================================= */
+  const DEFAULT_CLIENT_ID = "894459139039-6u67037jai6r399krhc6abjo9j49b4e0.apps.googleusercontent.com";
+
   /* ---------------- config / storage ---------------- */
   const CFG_KEY = "assetTracker.config.v1";
   const RECENT_KEY = "assetTracker.recent.v1";
@@ -401,6 +411,10 @@
       const proj = { id: "proj_default", name: c.label || "Default project", parentId: c.parentId, useSharedDrive: !!c.useSharedDrive, driveId: c.driveId || "" };
       c = { clientId: c.clientId, projects: proj.parentId ? [proj] : [], activeProjectId: proj.parentId ? proj.id : null };
       saveConfig(c);
+    }
+    if(DEFAULT_CLIENT_ID){
+      if(!c) c = { projects: [], activeProjectId: null };
+      if(!c.clientId){ c.clientId = DEFAULT_CLIENT_ID; saveConfig(c); }
     }
     return c;
   }
@@ -592,6 +606,11 @@
   });
   function fillSetupForm(){
     $("cfg-client-id").value = (config && config.clientId) || "";
+    if(DEFAULT_CLIENT_ID){
+      $("cfg-client-id").disabled = true;
+      $("client-id-hint").textContent = "Set centrally for the whole company — nothing to do here.";
+      $("save-config-btn").style.display = "none";
+    }
     renderProjectList();
   }
   function renderProjectList(){
