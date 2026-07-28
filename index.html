@@ -414,7 +414,7 @@
     }
     if(DEFAULT_CLIENT_ID){
       if(!c) c = { projects: [], activeProjectId: null };
-      if(!c.clientId){ c.clientId = DEFAULT_CLIENT_ID; saveConfig(c); }
+      if(c.clientId !== DEFAULT_CLIENT_ID){ c.clientId = DEFAULT_CLIENT_ID; saveConfig(c); }
     }
     return c;
   }
