@@ -824,12 +824,23 @@
     show("screen-signin");
     // 'none' never shows any Google UI — it either succeeds quietly because
     // this browser still has an active Google session that already granted
-    // access, or it fails immediately, in which case we show the normal
-    // sign-in button. This is what keeps people from having to re-pick an
-    // account every single time they reopen the app.
+    // access, or it fails, in which case we show the normal sign-in button.
+    // Some browsers (notably Safari, with tracking prevention on) can block
+    // this check silently, with no success AND no error ever firing — so we
+    // also cap it with a hard timeout to guarantee we never get stuck on a
+    // spinner with no way out.
+    let settled = false;
+    const giveUp = setTimeout(()=>{
+      if(settled) return;
+      settled = true;
+      revealManualSignIn();
+    }, 3500);
     const prevCallback = tokenClient.callback;
     tokenClient.callback = (resp)=>{
       tokenClient.callback = prevCallback;
+      if(settled) return; // already timed out and moved on — ignore a late response
+      settled = true;
+      clearTimeout(giveUp);
       if(resp.error){ revealManualSignIn(); return; }
       accessToken = resp.access_token;
       tokenExpiry = Date.now() + (resp.expires_in ? resp.expires_in*1000 : 3000*1000) - 60000;
