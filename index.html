@@ -833,6 +833,7 @@
     const giveUp = setTimeout(()=>{
       if(settled) return;
       settled = true;
+      tokenClient.callback = prevCallback; // hand control back so the next tap isn't swallowed by this timed-out attempt
       revealManualSignIn();
     }, 3500);
     const prevCallback = tokenClient.callback;
