@@ -49,6 +49,37 @@ export async function deleteSession(env, sid) {
   await env.SESSIONS.delete("session:" + sid);
 }
 
+// Projects and favorites live in the same KV namespace as sessions, just
+// under different key prefixes — one less piece of Cloudflare config to
+// set up. Shared projects are one single list everyone reads from;
+// personal projects and favorites are one list per person, keyed by email
+// so they follow someone across every device they sign into.
+const SHARED_PROJECTS_KEY = "shared_projects";
+
+export async function getSharedProjects(env) {
+  const raw = await env.SESSIONS.get(SHARED_PROJECTS_KEY);
+  return raw ? JSON.parse(raw) : [];
+}
+export async function saveSharedProjects(env, list) {
+  await env.SESSIONS.put(SHARED_PROJECTS_KEY, JSON.stringify(list));
+}
+export async function getUserProjects(env, email) {
+  if (!email) return [];
+  const raw = await env.SESSIONS.get("user_projects:" + email);
+  return raw ? JSON.parse(raw) : [];
+}
+export async function saveUserProjects(env, email, list) {
+  await env.SESSIONS.put("user_projects:" + email, JSON.stringify(list));
+}
+export async function getUserFavorites(env, email) {
+  if (!email) return [];
+  const raw = await env.SESSIONS.get("user_favorites:" + email);
+  return raw ? JSON.parse(raw) : [];
+}
+export async function saveUserFavorites(env, email, list) {
+  await env.SESSIONS.put("user_favorites:" + email, JSON.stringify(list));
+}
+
 // Google refresh tokens don't expire on their own use (barring revocation,
 // or the 7-day limit Google applies while an OAuth app is unverified) — so
 // this trade happens on effectively every API call, and the browser never
