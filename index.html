@@ -586,6 +586,11 @@
   }
 
   let flushing = false;
+  // Shared between the background sync (flushQueue) and the manual "Upload
+  // photos" button (uploadOne) — without this, both can grab the same
+  // queued photo at once and upload it twice, since neither knows the
+  // other exists.
+  const uploadingIds = new Set();
   async function updatePendingPill(){
     let count = 0;
     try{ count = (await dbGetAll()).length; }catch(e){ /* ignore */ }
@@ -605,6 +610,8 @@
     try{
       const rows = await dbGetAll();
       for(const row of rows){
+        if(uploadingIds.has(row.id)) continue; // the manual Upload button already has this one
+        uploadingIds.add(row.id);
         try{
           await uploadPhotoToFolder(row.blob, row.folderId, row.fileName);
           await dbDelete(row.id);
@@ -613,9 +620,11 @@
             if(match){ match.status = "done"; }
           }
         }catch(err){
+          uploadingIds.delete(row.id);
           // still failing (offline again, or a real error) — leave it queued and stop this pass
           break;
         }
+        uploadingIds.delete(row.id);
       }
     } finally {
       flushing = false;
@@ -1173,7 +1182,11 @@
     }
     try{
       mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 3840 },
+          height: { ideal: 2160 }
+        },
         audio: false
       });
     }catch(err){
@@ -1206,7 +1219,7 @@
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise(res => canvas.toBlob(res, "image/jpeg", 0.92));
+    const blob = await new Promise(res => canvas.toBlob(res, "image/jpeg", 0.95));
     if(!blob) return;
 
     // quick shutter-flash feedback so a rapid tap always feels acknowledged
@@ -1258,19 +1271,23 @@
   }
 
   async function uploadOne(record){
+    if(uploadingIds.has(record.localId)) return; // the background sync already has this one
+    uploadingIds.add(record.localId);
     record.status = "uploading";
     renderPhotoGrid();
-    const row = await dbGet(record.localId);
-    if(!row){ record.status = "done"; renderPhotoGrid(); return; } // already uploaded elsewhere (e.g. background sync)
     try{
+      const row = await dbGet(record.localId);
+      if(!row){ record.status = "done"; return; } // already uploaded elsewhere (e.g. background sync)
       await uploadPhotoToFolder(row.blob, row.folderId, row.fileName);
       await dbDelete(row.id);
       await updatePendingPill();
       record.status = "done";
     }catch(err){
       record.status = "queued";
+    }finally{
+      uploadingIds.delete(record.localId);
+      renderPhotoGrid();
     }
-    renderPhotoGrid();
   }
 
   async function uploadAllStaged(){
