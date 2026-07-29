@@ -191,6 +191,21 @@
     text-align:center;padding:34px 10px;color:var(--muted-2);font-size:13px;border:1.5px dashed var(--border);border-radius:12px;
   }
 
+  /* Live camera view */
+  .camera-video-wrap{
+    position:relative;width:100%;aspect-ratio:3/4;border-radius:var(--radius);overflow:hidden;
+    background:#0b0d10;box-shadow:var(--shadow);
+  }
+  .camera-video-wrap video{width:100%;height:100%;object-fit:cover;display:block;}
+  .camera-flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .35s ease;}
+  .camera-flash.hit{opacity:.85;transition:opacity .05s ease;}
+  .camera-shot-count{
+    position:absolute;top:12px;right:12px;background:rgba(10,12,15,.65);color:#fff;font-size:12px;font-weight:700;
+    padding:6px 12px;border-radius:999px;
+  }
+  .camera-live-thumbs{display:flex;gap:8px;overflow-x:auto;padding:2px;}
+  .camera-live-thumbs img{width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid var(--border);flex-shrink:0;}
+
   /* Search results */
   .search-box{position:relative;}
   .search-box input{padding-left:40px;}
@@ -301,12 +316,19 @@
       <div class="signin-mark">
         <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
       </div>
-      <div>
-        <h1>Sign in to Drive</h1>
-        <p class="lead">Use your company Google account. Access is scoped to the asset folders your account already has permission to see.</p>
+      <div id="signin-checking">
+        <h1>Reconnecting…</h1>
+        <p class="lead">Checking for an existing Google session on this device.</p>
+        <div class="spinner-lg" style="margin-top:14px;"></div>
       </div>
-      <button class="btn btn-primary" style="width:auto;padding:14px 26px;" id="signin-btn">Sign in with Google</button>
-      <button class="btn btn-ghost" style="width:auto;padding:10px 18px;" id="switch-account-btn">Not you? Choose a different account</button>
+      <div id="signin-manual" style="display:none;flex-direction:column;align-items:center;gap:18px;">
+        <div>
+          <h1>Sign in to Drive</h1>
+          <p class="lead">Use your company Google account. Access is scoped to the asset folders your account already has permission to see.</p>
+        </div>
+        <button class="btn btn-primary" style="width:auto;padding:14px 26px;" id="signin-btn">Sign in with Google</button>
+        <button class="btn btn-ghost" style="width:auto;padding:10px 18px;" id="switch-account-btn">Not you? Choose a different account</button>
+      </div>
     </div>
   </section>
 
@@ -364,22 +386,42 @@
       <span class="tag-name mono" id="capture-asset-name">—</span>
       <span class="capture-count" id="capture-count">0 photos</span>
     </div>
-    <div class="shutter-wrap">
-      <div class="shutter" id="shutter-btn">
-        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="7"/></svg>
+
+    <!-- LIVE CAMERA VIEW -->
+    <div id="camera-live" style="display:none;flex-direction:column;gap:12px;">
+      <div class="camera-video-wrap">
+        <video id="camera-video" autoplay playsinline muted></video>
+        <div class="camera-flash" id="camera-flash"></div>
+        <div class="camera-shot-count" id="camera-shot-count">0 taken</div>
       </div>
-      <div class="shutter-label">Tap to take a photo</div>
-      <button class="btn btn-ghost" id="library-btn" style="width:auto;padding:10px 16px;margin-top:2px;">Add multiple from Photos</button>
+      <div class="camera-live-thumbs" id="camera-live-thumbs"></div>
+      <div class="shutter-wrap" style="padding:4px 0 0;">
+        <div class="shutter" id="live-shutter-btn">
+          <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="7"/></svg>
+        </div>
+        <div class="shutter-label">Tap for each shot — camera stays open</div>
+        <button class="btn btn-primary" style="width:auto;padding:10px 18px;margin-top:2px;" id="close-camera-btn">Done shooting</button>
+      </div>
     </div>
-    <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none">
-    <input type="file" id="library-input" accept="image/*" multiple style="display:none">
-    <div class="hint" style="text-align:center;margin-top:-6px;">No signal right now? Keep shooting — photos queue on this device and upload automatically once you're back in range.</div>
-    <div id="photo-grid-wrap">
-      <div class="empty-photos" id="empty-photos">No photos yet for this asset. Tap the shutter above.</div>
-      <div class="photo-grid" id="photo-grid" style="display:none;"></div>
+
+    <!-- NORMAL REVIEW VIEW -->
+    <div id="capture-normal" style="display:flex;flex-direction:column;gap:16px;">
+      <div class="shutter-wrap">
+        <button class="btn btn-accent" style="width:auto;padding:14px 28px;" id="open-camera-btn">Open camera</button>
+        <button class="btn btn-ghost" id="library-btn" style="width:auto;padding:10px 16px;margin-top:2px;">Add multiple from Photos</button>
+      </div>
+      <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none">
+      <input type="file" id="library-input" accept="image/*" multiple style="display:none">
+      <div class="hint" style="text-align:center;margin-top:-6px;">Open the camera once and keep shooting — nothing uploads until you tap Upload below. Every photo's saved on this device the moment you take it, signal or not.</div>
+      <div id="photo-grid-wrap">
+        <div class="empty-photos" id="empty-photos">No photos yet for this asset. Tap Open camera above.</div>
+        <div class="photo-grid" id="photo-grid" style="display:none;"></div>
+      </div>
+      <button class="btn btn-accent" id="upload-batch-btn" style="display:none;">Upload photos</button>
+      <button class="btn btn-ghost" id="done-btn">Done with this asset</button>
     </div>
-    <button class="btn btn-primary" id="done-btn">Done with this asset</button>
   </section>
+
 
 </main>
 
@@ -505,6 +547,15 @@
       req.onerror = ()=> reject(req.error);
     });
   }
+  async function dbGet(id){
+    const db = await openDB();
+    return new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE, "readonly");
+      const req = tx.objectStore(STORE).get(id);
+      req.onsuccess = ()=> resolve(req.result || null);
+      req.onerror = ()=> reject(req.error);
+    });
+  }
 
   let flushing = false;
   async function updatePendingPill(){
@@ -589,6 +640,7 @@
     btn.addEventListener("click", ()=> routeHome());
   });
   function routeHome(){
+    closeLiveCamera();
     renderRecent();
     refreshActiveProjectUI();
     show("screen-home");
@@ -751,6 +803,7 @@
       callback: (resp)=>{
         if(resp.error){
           toast("Sign-in failed: " + resp.error, "bad");
+          revealManualSignIn();
           return;
         }
         accessToken = resp.access_token;
@@ -759,7 +812,31 @@
         routeHome();
       }
     });
+    attemptSilentReconnect();
+  }
+  function revealManualSignIn(){
+    $("signin-checking").style.display = "none";
+    $("signin-manual").style.display = "flex";
+  }
+  function attemptSilentReconnect(){
+    $("signin-checking").style.display = "block";
+    $("signin-manual").style.display = "none";
     show("screen-signin");
+    // 'none' never shows any Google UI — it either succeeds quietly because
+    // this browser still has an active Google session that already granted
+    // access, or it fails immediately, in which case we show the normal
+    // sign-in button. This is what keeps people from having to re-pick an
+    // account every single time they reopen the app.
+    const prevCallback = tokenClient.callback;
+    tokenClient.callback = (resp)=>{
+      tokenClient.callback = prevCallback;
+      if(resp.error){ revealManualSignIn(); return; }
+      accessToken = resp.access_token;
+      tokenExpiry = Date.now() + (resp.expires_in ? resp.expires_in*1000 : 3000*1000) - 60000;
+      setConnected(true);
+      routeHome();
+    };
+    tokenClient.requestAccessToken({ prompt: "none" });
   }
   $("conn-pill").addEventListener("click", ()=>{
     if(!accessToken) return; // already signed out, nothing to switch
@@ -767,6 +844,7 @@
     accessToken = null;
     tokenExpiry = 0;
     setConnected(false);
+    revealManualSignIn();
     show("screen-signin");
   });
   $("signin-btn").addEventListener("click", ()=>{
@@ -1000,6 +1078,7 @@
     currentFolder = folder;
     photos = [];
     $("capture-asset-name").textContent = folder.name;
+    closeLiveCamera(); // in case a previous session left the camera running
     renderPhotoGrid();
     show("screen-capture");
     loadQueuedForFolder(folder.id);
@@ -1015,7 +1094,73 @@
     }catch(e){ /* ignore */ }
   }
 
-  $("shutter-btn").addEventListener("click", ()=> $("camera-input").click());
+  /* ---------------- live camera (stays open across many shots) ---------------- */
+  let mediaStream = null;
+  let liveShotCount = 0;
+
+  async function openLiveCamera(){
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      toast("This browser can't open a live camera here — using single-photo mode instead", "bad");
+      $("camera-input").click();
+      return;
+    }
+    try{
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false
+      });
+    }catch(err){
+      toast("Couldn't access the camera — check camera permission for this site", "bad");
+      return;
+    }
+    $("camera-video").srcObject = mediaStream;
+    liveShotCount = 0;
+    $("camera-shot-count").textContent = "0 taken";
+    $("camera-live-thumbs").innerHTML = "";
+    $("capture-normal").style.display = "none";
+    $("camera-live").style.display = "flex";
+  }
+
+  function closeLiveCamera(){
+    if(mediaStream){
+      mediaStream.getTracks().forEach(t=>t.stop());
+      mediaStream = null;
+    }
+    $("camera-video").srcObject = null;
+    $("camera-live").style.display = "none";
+    $("capture-normal").style.display = "flex";
+    renderPhotoGrid();
+  }
+
+  async function captureLiveFrame(){
+    const video = $("camera-video");
+    if(!video.videoWidth){ return; } // not ready yet
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise(res => canvas.toBlob(res, "image/jpeg", 0.92));
+    if(!blob) return;
+
+    // quick shutter-flash feedback so a rapid tap always feels acknowledged
+    const flash = $("camera-flash");
+    flash.classList.add("hit");
+    setTimeout(()=> flash.classList.remove("hit"), 90);
+
+    liveShotCount++;
+    $("camera-shot-count").textContent = liveShotCount + (liveShotCount===1 ? " taken" : " taken");
+
+    const thumb = document.createElement("img");
+    thumb.src = URL.createObjectURL(blob);
+    $("camera-live-thumbs").prepend(thumb);
+
+    await stagePhoto(blob);
+  }
+
+  $("open-camera-btn").addEventListener("click", openLiveCamera);
+  $("close-camera-btn").addEventListener("click", closeLiveCamera);
+  $("live-shutter-btn").addEventListener("click", captureLiveFrame);
+
   $("library-btn").addEventListener("click", ()=> $("library-input").click());
   $("camera-input").addEventListener("change", (e)=> handleNewFiles(e.target.files, e.target));
   $("library-input").addEventListener("change", (e)=> handleNewFiles(e.target.files, e.target));
@@ -1024,45 +1169,74 @@
     const files = Array.from(fileList || []);
     inputEl.value = "";
     for(const file of files){
-      await queueAndUpload(file);
+      await stagePhoto(file);
     }
   }
 
-  async function queueAndUpload(file){
+  async function stagePhoto(file){
     const localId = "p" + Date.now().toString(16) + Math.random().toString(16).slice(2);
     const fileName = uniqueFileName(currentFolder.name, file.type);
     const reader = new FileReader();
     const dataUrl = await new Promise(res=>{ reader.onload = ()=> res(reader.result); reader.readAsDataURL(file); });
 
-    // Save to durable storage FIRST, before ever attempting a network call —
-    // this is what makes a photo survive a closed tab or a dead zone.
+    // Save to durable storage immediately — this is what makes a photo
+    // survive a closed tab or a dead zone, whether or not it's uploaded
+    // right away. Nothing is uploaded until "Upload photos" is tapped
+    // (or the background sync picks it up as a safety net).
     await dbPut({ id: localId, folderId: currentFolder.id, folderName: currentFolder.name, fileName, blob: file, dataUrl });
     await updatePendingPill();
 
-    const record = { localId, dataUrl, status: navigator.onLine ? "uploading" : "queued" };
-    photos.unshift(record);
+    photos.unshift({ localId, dataUrl, status: "queued" });
     renderPhotoGrid();
-
-    if(!navigator.onLine){ return; }
-    attemptUpload(record, file, fileName, currentFolder.id);
   }
 
-  function attemptUpload(record, file, fileName, folderId){
-    uploadPhotoToFolder(file, folderId, fileName).then(async ()=>{
-      await dbDelete(record.localId);
+  async function uploadOne(record){
+    record.status = "uploading";
+    renderPhotoGrid();
+    const row = await dbGet(record.localId);
+    if(!row){ record.status = "done"; renderPhotoGrid(); return; } // already uploaded elsewhere (e.g. background sync)
+    try{
+      await uploadPhotoToFolder(row.blob, row.folderId, row.fileName);
+      await dbDelete(row.id);
       await updatePendingPill();
       record.status = "done";
-      renderPhotoGrid();
-    }).catch(()=>{
+    }catch(err){
       record.status = "queued";
-      renderPhotoGrid();
-    });
+    }
+    renderPhotoGrid();
+  }
+
+  async function uploadAllStaged(){
+    if(!navigator.onLine){ toast("No connection right now — these will upload automatically once you're back in range", "bad"); return; }
+    const targets = photos.filter(p=>p.status==="queued");
+    if(!targets.length) return;
+    const btn = $("upload-batch-btn");
+    btn.disabled = true;
+    btn.textContent = "Uploading…";
+    for(const rec of targets){
+      await uploadOne(rec);
+    }
+    btn.disabled = false;
+    updateBatchButton();
+  }
+  $("upload-batch-btn").addEventListener("click", uploadAllStaged);
+
+  function updateBatchButton(){
+    const btn = $("upload-batch-btn");
+    const count = photos.filter(p=>p.status!=="done").length;
+    if(count > 0){
+      btn.style.display = "flex";
+      btn.textContent = "Upload " + count + (count===1 ? " photo" : " photos");
+    }else{
+      btn.style.display = "none";
+    }
   }
 
   function renderPhotoGrid(){
     $("capture-count").textContent = photos.length + (photos.length===1 ? " photo" : " photos");
     const grid = $("photo-grid");
     const empty = $("empty-photos");
+    updateBatchButton();
     if(!photos.length){
       grid.style.display = "none";
       empty.style.display = "block";
@@ -1077,16 +1251,15 @@
       const statusHtml = p.status === "uploading"
         ? '<div class="photo-status uploading"><div class="spin"></div></div>'
         : p.status === "queued"
-          ? '<div class="photo-status queued" title="Waiting for a connection">⏳</div>'
+          ? '<div class="photo-status queued" title="Not uploaded yet — tap to upload just this one">⏳</div>'
           : p.status === "error"
             ? '<div class="photo-status error">!</div>'
             : '<div class="photo-status done">✓</div>';
       cell.innerHTML = '<img src="'+p.dataUrl+'">' + statusHtml;
       if(p.status === "queued"){
-        cell.addEventListener("click", async ()=>{
+        cell.addEventListener("click", ()=>{
           if(!navigator.onLine){ toast("Still offline", "bad"); return; }
-          toast("Retrying…");
-          flushQueue();
+          uploadOne(p);
         });
       }
       grid.appendChild(cell);
