@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Asset Tracker</title>
+<link rel="manifest" id="manifest-link" href="data:application/json,">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap');
+
+  :root{
+    --bg:#F0F1F4;
+    --surface:#FFFFFF;
+    --ink:#181B20;
+    --muted:#6B7280;
+    --muted-2:#9CA3AF;
+    --border:#E2E4E9;
+    --accent:#DD8B1F;
+    --accent-ink:#5A3B0A;
+    --accent-soft:#FCEDD4;
+    --good:#1E8E71;
+    --good-soft:#E1F5EE;
+    --bad:#C0392B;
+    --bad-soft:#FBEAE8;
+    --radius:14px;
+    --shadow:0 1px 2px rgba(20,20,30,.04), 0 8px 24px -12px rgba(20,20,30,.12);
+    font-family:'Inter',system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);height:100%;-webkit-tap-highlight-color:transparent;}
+  body{min-height:100dvh;display:flex;flex-direction:column;}
+  .mono{font-family:'IBM Plex Mono',ui-monospace,monospace;}
+  button{font-family:inherit;}
+  ::selection{background:var(--accent-soft);}
+
+  /* ---------- top bar ---------- */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 18px;background:var(--surface);border-bottom:1px solid var(--border);
+    position:sticky;top:0;z-index:20;
+  }
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand-mark{
+    width:32px;height:32px;border-radius:8px;background:var(--ink);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  }
+  .brand-mark svg{width:18px;height:18px;}
+  .brand-name{font-weight:800;font-size:16px;letter-spacing:-.01em;}
+  .brand-sub{font-size:11px;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase;}
+  .topbar-actions{display:flex;align-items:center;gap:8px;}
+  .icon-btn{
+    width:38px;height:38px;border-radius:10px;border:1px solid var(--border);background:var(--surface);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--muted);
+  }
+  .icon-btn:active{background:var(--bg);}
+  .pill{
+    display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--muted);
+    padding:6px 10px;border-radius:999px;background:var(--bg);border:1px solid var(--border);
+  }
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--muted-2);}
+  .dot.on{background:var(--good);}
+  .dot.offline{background:var(--accent);}
+
+  /* ---------- main ---------- */
+  main{flex:1;display:flex;flex-direction:column;max-width:720px;width:100%;margin:0 auto;padding:20px 18px 100px;}
+  .screen{display:none;flex-direction:column;gap:16px;animation:rise .28s ease both;}
+  .screen.active{display:flex;}
+  @keyframes rise{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+
+  h1{font-size:22px;margin:4px 0 0;letter-spacing:-.01em;}
+  h2{font-size:17px;margin:0;letter-spacing:-.01em;}
+  p.lead{color:var(--muted);font-size:14px;line-height:1.5;margin:0;}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;}
+
+  /* Big action tiles on home screen */
+  .actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px;}
+  @media (max-width:480px){.actions{grid-template-columns:1fr;}}
+  .action-tile{
+    background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:22px 18px;text-align:left;cursor:pointer;box-shadow:var(--shadow);
+    display:flex;flex-direction:column;gap:10px;transition:transform .12s ease, border-color .12s ease;
+  }
+  .action-tile:active{transform:scale(.98);}
+  .action-tile.primary{background:var(--ink);border-color:var(--ink);}
+  .action-tile.primary .tile-title, .action-tile.primary .tile-desc{color:#fff;}
+  .action-tile.primary .tile-desc{color:#B9BCC4;}
+  .tile-icon{
+    width:40px;height:40px;border-radius:10px;background:var(--accent-soft);color:var(--accent-ink);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .action-tile.primary .tile-icon{background:var(--accent);color:#241300;}
+  .tile-title{font-weight:700;font-size:15px;}
+  .tile-desc{font-size:12.5px;color:var(--muted);line-height:1.4;}
+
+  /* Recent list */
+  .section-label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-2);margin:8px 2px 0;}
+
+  /* Active project chip on home screen */
+  .project-chip{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    background:var(--surface);border:1px solid var(--border);border-radius:10px;
+    padding:12px 14px;cursor:pointer;box-shadow:var(--shadow);
+  }
+  .project-chip-label{font-size:11px;color:var(--muted-2);font-weight:700;text-transform:uppercase;letter-spacing:.06em;}
+  .project-chip-name{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:14.5px;margin-top:2px;}
+  .project-chip-switch{font-size:12px;font-weight:700;color:var(--accent-ink);background:var(--accent-soft);padding:6px 10px;border-radius:999px;flex-shrink:0;}
+
+  /* Asset tag card - signature element */
+  .tag{
+    position:relative;display:flex;align-items:center;gap:14px;background:var(--surface);
+    border:1px solid var(--border);border-radius:10px;padding:14px 16px 14px 20px;cursor:pointer;
+    box-shadow:var(--shadow);
+  }
+  .tag:active{background:var(--bg);}
+  .tag::before{
+    content:"";position:absolute;left:-1px;top:50%;transform:translateY(-50%);
+    width:14px;height:14px;border-radius:50%;background:var(--bg);border:1px solid var(--border);
+  }
+  .tag-name{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:14px;letter-spacing:.01em;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .tag-meta{font-size:11px;color:var(--muted-2);flex-shrink:0;}
+  .tag-arrow{color:var(--muted-2);flex-shrink:0;}
+  .tag-list{display:flex;flex-direction:column;gap:8px;}
+
+  /* Forms */
+  label.field-label{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:7px;}
+  input[type=text], input[type=url]{
+    width:100%;padding:13px 14px;border:1.5px solid var(--border);border-radius:10px;font-size:15px;
+    font-family:'IBM Plex Mono',monospace;background:var(--bg);color:var(--ink);outline:none;
+  }
+  input[type=text]:focus, input[type=url]:focus{border-color:var(--accent);background:var(--surface);}
+  input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);}
+  .field{margin-bottom:16px;}
+  .field:last-child{margin-bottom:0;}
+  .hint{font-size:12px;color:var(--muted-2);margin-top:6px;line-height:1.4;}
+
+  .btn{
+    border:none;border-radius:10px;padding:14px 20px;font-weight:700;font-size:14.5px;cursor:pointer;
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;
+  }
+  .btn:active{transform:scale(.985);}
+  .btn:disabled{opacity:.45;pointer-events:none;}
+  .btn-primary{background:var(--ink);color:#fff;}
+  .btn-accent{background:var(--accent);color:#241300;}
+  .btn-ghost{background:transparent;color:var(--muted);border:1.5px solid var(--border);}
+  .btn-row{display:flex;gap:10px;}
+  .btn-row .btn{width:auto;flex:1;}
+
+  .back-row{display:flex;align-items:center;gap:10px;margin-bottom:2px;}
+  .back-btn{
+    width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--surface);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;
+  }
+  .crumb{font-size:12px;color:var(--muted);font-weight:600;}
+  .crumb b{color:var(--ink);font-family:'IBM Plex Mono',monospace;}
+
+  /* Capture screen */
+  .capture-header{
+    display:flex;align-items:center;justify-content:space-between;background:var(--surface);
+    border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow);
+  }
+  .capture-header .tag-name{font-size:16px;}
+  .capture-count{font-size:12px;color:var(--muted);font-weight:600;}
+
+  .shutter-wrap{display:flex;flex-direction:column;align-items:center;gap:12px;padding:14px 0 4px;}
+  .shutter{
+    width:82px;height:82px;border-radius:50%;background:var(--ink);border:5px solid var(--surface);
+    outline:2px solid var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;
+    box-shadow:var(--shadow);
+  }
+  .shutter svg{width:28px;height:28px;color:#fff;}
+  .shutter:active{transform:scale(.94);}
+  .shutter-label{font-size:12.5px;color:var(--muted);font-weight:600;}
+
+  .photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+  .photo-cell{
+    position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--bg);
+    border:1px solid var(--border);
+  }
+  .photo-cell img{width:100%;height:100%;object-fit:cover;display:block;}
+  .photo-status{
+    position:absolute;bottom:5px;right:5px;width:22px;height:22px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;font-size:11px;color:#fff;
+  }
+  .photo-status.uploading{background:rgba(24,27,32,.75);}
+  .photo-status.done{background:var(--good);}
+  .photo-status.error{background:var(--bad);}
+  .photo-status.queued{background:var(--accent);color:#241300;}
+  .spin{width:11px;height:11px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .empty-photos{
+    text-align:center;padding:34px 10px;color:var(--muted-2);font-size:13px;border:1.5px dashed var(--border);border-radius:12px;
+  }
+
+  /* Live camera view */
+  .camera-video-wrap{
+    position:relative;width:100%;aspect-ratio:3/4;border-radius:var(--radius);overflow:hidden;
+    background:#0b0d10;box-shadow:var(--shadow);
+  }
+  .camera-video-wrap video{width:100%;height:100%;object-fit:cover;display:block;}
+  .camera-flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .35s ease;}
+  .camera-flash.hit{opacity:.85;transition:opacity .05s ease;}
+  .camera-shot-count{
+    position:absolute;top:12px;right:12px;background:rgba(10,12,15,.65);color:#fff;font-size:12px;font-weight:700;
+    padding:6px 12px;border-radius:999px;
+  }
+  .camera-live-thumbs{display:flex;gap:8px;overflow-x:auto;padding:2px;}
+  .camera-live-thumbs img{width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid var(--border);flex-shrink:0;}
+
+  /* Search results */
+  .search-box{position:relative;}
+  .search-box input{padding-left:40px;}
+  .search-icon{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--muted-2);}
+  .load-more{text-align:center;padding:10px;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;}
+
+  /* Toasts */
+  #toast-host{position:fixed;bottom:20px;left:0;right:0;display:flex;flex-direction:column;align-items:center;gap:8px;z-index:100;pointer-events:none;}
+  .toast{
+    background:var(--ink);color:#fff;padding:11px 18px;border-radius:999px;font-size:13px;font-weight:600;
+    box-shadow:var(--shadow);animation:toastin .2s ease;max-width:90vw;
+  }
+  .toast.bad{background:var(--bad);}
+  .toast.good{background:var(--good);}
+  @keyframes toastin{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+
+  .signin-wrap{display:flex;flex-direction:column;align-items:center;text-align:center;gap:18px;padding:60px 10px 20px;}
+  .signin-mark{width:64px;height:64px;border-radius:16px;background:var(--ink);display:flex;align-items:center;justify-content:center;}
+  .signin-mark svg{width:34px;height:34px;}
+
+  .footer-note{text-align:center;font-size:11.5px;color:var(--muted-2);padding:14px 0 4px;}
+  a.link{color:var(--accent-ink);font-weight:600;text-decoration:none;}
+
+  .spinner-lg{width:22px;height:22px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-mark">
+      <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+    </div>
+    <div>
+      <div class="brand-name">Asset Tracker</div>
+      <div class="brand-sub" id="drive-target-label">Field capture</div>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <div class="pill" id="pending-pill" style="display:none;cursor:pointer;" title="Tap to sync now"><span class="dot" style="background:var(--accent);"></span><span id="pending-text">0 pending</span></div>
+    <div class="pill" id="conn-pill" style="cursor:pointer;" title="Tap to switch Google account"><span class="dot" id="conn-dot"></span><span id="conn-text">Signed out</span></div>
+    <div class="icon-btn" id="settings-btn" title="Settings">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 9 19.36a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.64 15a1.7 1.7 0 0 0-1.55-1H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.64 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.64a1.7 1.7 0 0 0 1-1.55V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.36 9a1.7 1.7 0 0 0 1.55 1H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/></svg>
+    </div>
+  </div>
+</div>
+
+<main>
+
+  <!-- SETUP SCREEN -->
+  <section class="screen" id="screen-setup">
+    <h1>Projects</h1>
+    <p class="lead">Each project points at its own Drive folder — add one per job site, client, or personal folder.</p>
+
+    <div class="tag-list" id="project-list"></div>
+    <button class="btn btn-ghost" id="add-project-btn">+ Add a project</button>
+
+    <div class="footer-note">Values are stored only on this device (localStorage) — nothing is sent anywhere but Google Drive.</div>
+  </section>
+
+  <!-- PROJECT EDIT SCREEN -->
+  <section class="screen" id="screen-project-edit">
+    <div class="back-row"><div class="back-btn" id="back-to-setup-btn"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></div><span class="crumb" id="project-edit-crumb">Add project</span></div>
+    <div class="card">
+      <div class="field">
+        <label class="field-label">Project name</label>
+        <input type="text" id="proj-name" placeholder="e.g. Phoenix Site">
+        <div class="hint">Shown in the app when you're switching between projects.</div>
+      </div>
+      <div class="field">
+        <label class="field-label">Parent folder ID (optional)</label>
+        <input type="text" id="proj-parent-id" placeholder="1AbCdeFGhijKLmNoPQRstuVWxyz">
+        <div class="hint">Leave blank to create assets at the top level of My Drive (or the Shared Drive itself, if checked below). Otherwise paste the ID from the folder's Drive URL: drive.google.com/drive/folders/<b>THIS PART</b></div>
+      </div>
+      <div class="field">
+        <label class="field-label" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+          <input type="checkbox" id="proj-use-shared-drive"> Assets live on a Shared Drive
+        </label>
+        <input type="text" id="proj-drive-id" placeholder="Shared Drive ID (optional)">
+        <div class="hint">Only needed if the folder above lives inside a Shared Drive, not My Drive.</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" id="delete-project-btn" style="display:none;color:var(--bad);border-color:var(--bad-soft);">Delete</button>
+        <button class="btn btn-accent" id="save-project-btn">Save project</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- SWITCH PROJECT SCREEN -->
+  <section class="screen" id="screen-projects">
+    <div class="back-row"><div class="back-btn" data-back="home"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></div><span class="crumb">Switch project</span></div>
+    <div class="tag-list" id="project-switch-list"></div>
+    <button class="btn btn-ghost" id="manage-projects-btn">Manage projects</button>
+  </section>
+
+  <!-- SIGN IN SCREEN -->
+  <section class="screen" id="screen-signin">
+    <div class="signin-wrap">
+      <div class="signin-mark">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+      <div id="signin-checking">
+        <h1>Checking…</h1>
+        <p class="lead">Looking for an active session on this device.</p>
+        <div class="spinner-lg" style="margin-top:14px;"></div>
+      </div>
+      <div id="signin-manual" style="display:none;flex-direction:column;align-items:center;gap:18px;">
+        <div>
+          <h1>Sign in to Drive</h1>
+          <p class="lead">Use your Google account. Access is scoped to the asset folders your account already has permission to see.</p>
+        </div>
+        <button class="btn btn-primary" style="width:auto;padding:14px 26px;" id="signin-btn">Sign in with Google</button>
+        <button class="btn btn-ghost" style="width:auto;padding:10px 18px;" id="switch-account-btn">Not you? Choose a different account</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOME SCREEN -->
+  <section class="screen" id="screen-home">
+    <div>
+      <h1>New photos to log?</h1>
+      <p class="lead">Start a new asset or add to one that already exists.</p>
+    </div>
+    <div class="project-chip" id="project-chip">
+      <div><div class="project-chip-label">Active project</div><div class="project-chip-name" id="active-project-name">—</div></div>
+      <div class="project-chip-switch">Switch</div>
+    </div>
+    <div class="actions">
+      <div class="action-tile primary" id="tile-new">
+        <div class="tile-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></div>
+        <div><div class="tile-title">Create new asset</div><div class="tile-desc">Name it, then start shooting photos straight into its own folder.</div></div>
+      </div>
+      <div class="action-tile" id="tile-search">
+        <div class="tile-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></div>
+        <div><div class="tile-title">Add to existing asset</div><div class="tile-desc">Find a folder that's already been created and drop more photos in.</div></div>
+      </div>
+    </div>
+    <div class="section-label">Recently opened on this device</div>
+    <div class="tag-list" id="recent-list"></div>
+  </section>
+
+  <!-- NEW ASSET NAME SCREEN -->
+  <section class="screen" id="screen-new">
+    <div class="back-row"><div class="back-btn" data-back="home"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></div><span class="crumb">New asset</span></div>
+    <div class="card">
+      <div class="field">
+        <label class="field-label">Asset name</label>
+        <input type="text" id="new-asset-name" placeholder="e.g. FORKLIFT-014" autocomplete="off">
+        <div class="hint">This becomes the folder name in Drive. Use your site's naming convention.</div>
+      </div>
+      <button class="btn btn-accent" id="create-asset-btn">Create folder &amp; start shooting</button>
+    </div>
+  </section>
+
+  <!-- SEARCH SCREEN -->
+  <section class="screen" id="screen-search">
+    <div class="back-row"><div class="back-btn" data-back="home"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></div><span class="crumb">Find existing asset</span></div>
+    <div class="search-box">
+      <span class="search-icon"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span>
+      <input type="text" id="search-input" placeholder="Search asset folders…" autocomplete="off">
+    </div>
+    <div class="tag-list" id="search-results"></div>
+  </section>
+
+  <!-- CAPTURE SCREEN -->
+  <section class="screen" id="screen-capture">
+    <div class="back-row"><div class="back-btn" data-back="home"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></div><span class="crumb">Adding photos to</span></div>
+    <div class="capture-header">
+      <span class="tag-name mono" id="capture-asset-name">—</span>
+      <span class="capture-count" id="capture-count">0 photos</span>
+    </div>
+
+    <!-- LIVE CAMERA VIEW -->
+    <div id="camera-live" style="display:none;flex-direction:column;gap:12px;">
+      <div class="camera-video-wrap">
+        <video id="camera-video" autoplay playsinline muted></video>
+        <div class="camera-flash" id="camera-flash"></div>
+        <div class="camera-shot-count" id="camera-shot-count">0 taken</div>
+      </div>
+      <div class="camera-live-thumbs" id="camera-live-thumbs"></div>
+      <div class="shutter-wrap" style="padding:4px 0 0;">
+        <div class="shutter" id="live-shutter-btn">
+          <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="7"/></svg>
+        </div>
+        <div class="shutter-label">Tap for each shot — camera stays open</div>
+        <button class="btn btn-primary" style="width:auto;padding:10px 18px;margin-top:2px;" id="close-camera-btn">Done shooting</button>
+      </div>
+    </div>
+
+    <!-- NORMAL REVIEW VIEW -->
+    <div id="capture-normal" style="display:flex;flex-direction:column;gap:16px;">
+      <div class="shutter-wrap">
+        <button class="btn btn-accent" style="width:auto;padding:14px 28px;" id="open-camera-btn">Open camera</button>
+        <button class="btn btn-ghost" id="library-btn" style="width:auto;padding:10px 16px;margin-top:2px;">Add multiple from Photos</button>
+      </div>
+      <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none">
+      <input type="file" id="library-input" accept="image/*" multiple style="display:none">
+      <div class="hint" style="text-align:center;margin-top:-6px;">Open the camera once and keep shooting — nothing uploads until you tap Upload below. Every photo's saved on this device the moment you take it, signal or not.</div>
+      <div id="photo-grid-wrap">
+        <div class="empty-photos" id="empty-photos">No photos yet for this asset. Tap Open camera above.</div>
+        <div class="photo-grid" id="photo-grid" style="display:none;"></div>
+      </div>
+      <button class="btn btn-accent" id="upload-batch-btn" style="display:none;">Upload photos</button>
+      <button class="btn btn-ghost" id="done-btn">Done with this asset</button>
+    </div>
+  </section>
+
+
+</main>
+
+<div id="toast-host"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- config / storage ---------------- */
+  const CFG_KEY = "assetTracker.config.v1";
+  const RECENT_KEY = "assetTracker.recent.v1";
+
+  function loadConfig(){
+    let c;
+    try{ c = JSON.parse(localStorage.getItem(CFG_KEY) || "null"); }catch(e){ c = null; }
+    if(c && !c.projects){
+      // migrate from the old single-parent-folder shape
+      const proj = { id: "proj_default", name: c.label || "Default project", parentId: c.parentId, useSharedDrive: !!c.useSharedDrive, driveId: c.driveId || "" };
+      c = { projects: proj.parentId ? [proj] : [], activeProjectId: proj.parentId ? proj.id : null };
+      saveConfig(c);
+    }
+    if(!c) c = { projects: [], activeProjectId: null };
+    return c;
+  }
+  function saveConfig(cfg){ localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); }
+  function getActiveProject(){
+    if(!config || !config.projects) return null;
+    return config.projects.find(p=>p.id===config.activeProjectId) || config.projects[0] || null;
+  }
+  function loadRecentMap(){
+    let raw;
+    try{ raw = JSON.parse(localStorage.getItem(RECENT_KEY) || "{}"); }catch(e){ raw = {}; }
+    if(Array.isArray(raw)){
+      const proj = getActiveProject();
+      raw = proj ? { [proj.id]: raw } : {};
+    }
+    return raw;
+  }
+  function saveRecentMap(map){ localStorage.setItem(RECENT_KEY, JSON.stringify(map)); }
+  function loadRecent(){
+    const proj = getActiveProject();
+    if(!proj) return [];
+    return (loadRecentMap()[proj.id] || []);
+  }
+  function addRecent(folder){
+    const proj = getActiveProject();
+    if(!proj) return;
+    const map = loadRecentMap();
+    const list = (map[proj.id] || []).filter(f => f.id !== folder.id);
+    list.unshift(folder);
+    map[proj.id] = list.slice(0,10);
+    saveRecentMap(map);
+  }
+
+  let config = loadConfig();
+  let userEmail = null; // set once /api/whoami confirms an active server-side session
+  let currentFolder = null; // {id, name}
+  let photos = []; // {localId, name, dataUrl, status, driveId}
+
+  const $ = (id) => document.getElementById(id);
+
+  /* ---------------- offline queue (IndexedDB) ----------------
+     Every photo is written here BEFORE an upload is attempted, so a photo
+     is never lost even if the tab is closed, the device loses power, or
+     there's no signal at all. Rows are deleted only once Drive confirms
+     the upload. */
+  const DB_NAME = "assetTrackerDB";
+  const STORE = "pending";
+  let dbPromise = null;
+  function openDB(){
+    if(dbPromise) return dbPromise;
+    dbPromise = new Promise((resolve, reject)=>{
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = ()=>{
+        req.result.createObjectStore(STORE, { keyPath: "id" });
+      };
+      req.onsuccess = ()=> resolve(req.result);
+      req.onerror = ()=> reject(req.error);
+    });
+    return dbPromise;
+  }
+  async function dbPut(record){
+    const db = await openDB();
+    return new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).put(record);
+      tx.oncomplete = ()=> resolve();
+      tx.onerror = ()=> reject(tx.error);
+    });
+  }
+  async function dbDelete(id){
+    const db = await openDB();
+    return new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).delete(id);
+      tx.oncomplete = ()=> resolve();
+      tx.onerror = ()=> reject(tx.error);
+    });
+  }
+  async function dbGetAll(){
+    const db = await openDB();
+    return new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE, "readonly");
+      const req = tx.objectStore(STORE).getAll();
+      req.onsuccess = ()=> resolve(req.result || []);
+      req.onerror = ()=> reject(req.error);
+    });
+  }
+  async function dbGet(id){
+    const db = await openDB();
+    return new Promise((resolve, reject)=>{
+      const tx = db.transaction(STORE, "readonly");
+      const req = tx.objectStore(STORE).get(id);
+      req.onsuccess = ()=> resolve(req.result || null);
+      req.onerror = ()=> reject(req.error);
+    });
+  }
+
+  let flushing = false;
+  async function updatePendingPill(){
+    let count = 0;
+    try{ count = (await dbGetAll()).length; }catch(e){ /* ignore */ }
+    const pill = $("pending-pill");
+    if(count > 0){
+      pill.style.display = "flex";
+      $("pending-text").textContent = count + (count===1 ? " pending" : " pending");
+    }else{
+      pill.style.display = "none";
+    }
+    return count;
+  }
+
+  async function flushQueue(){
+    if(flushing || !navigator.onLine) return;
+    flushing = true;
+    try{
+      const rows = await dbGetAll();
+      for(const row of rows){
+        try{
+          await uploadPhotoToFolder(row.blob, row.folderId, row.fileName);
+          await dbDelete(row.id);
+          if(currentFolder && row.folderId === currentFolder.id){
+            const match = photos.find(p=>p.localId===row.id);
+            if(match){ match.status = "done"; }
+          }
+        }catch(err){
+          // still failing (offline again, or a real error) — leave it queued and stop this pass
+          break;
+        }
+      }
+    } finally {
+      flushing = false;
+      await updatePendingPill();
+      renderPhotoGrid();
+    }
+  }
+  window.addEventListener("online", flushQueue);
+  setInterval(flushQueue, 20000);
+  $("pending-pill").addEventListener("click", ()=>{
+    if(!navigator.onLine){ toast("Still offline — will sync once you're back in range", "bad"); return; }
+    toast("Syncing…");
+    flushQueue();
+  });
+
+  function slugForName(name){
+    return String(name).trim().replace(/[^a-z0-9\-_. ]/gi, "").replace(/\s+/g, "_") || "asset";
+  }
+  function uniqueFileName(folderName, mimeType){
+    const ext = (mimeType && mimeType.split("/")[1]) ? mimeType.split("/")[1].replace("jpeg","jpg") : "jpg";
+    const now = new Date();
+    const stamp = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,"0") + "-" + String(now.getDate()).padStart(2,"0")
+      + "_" + String(now.getHours()).padStart(2,"0") + String(now.getMinutes()).padStart(2,"0") + String(now.getSeconds()).padStart(2,"0");
+    const rand = Math.random().toString(16).slice(2,6);
+    return slugForName(folderName) + "_" + stamp + "_" + rand + "." + ext;
+  }
+
+  /* ---------------- toast ---------------- */
+  function toast(msg, kind){
+    const host = $("toast-host");
+    const el = document.createElement("div");
+    el.className = "toast" + (kind ? " " + kind : "");
+    el.textContent = msg;
+    host.appendChild(el);
+    setTimeout(() => el.remove(), 3400);
+  }
+
+  function esc(str){
+    const d = document.createElement("div");
+    d.textContent = str == null ? "" : String(str);
+    return d.innerHTML;
+  }
+
+  /* ---------------- screen routing ---------------- */
+  function show(id){
+    document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+    $(id).classList.add("active");
+  }
+  document.querySelectorAll("[data-back]").forEach(btn=>{
+    btn.addEventListener("click", ()=> routeHome());
+  });
+  function routeHome(){
+    closeLiveCamera();
+    renderRecent();
+    refreshActiveProjectUI();
+    updateOfflineTileState();
+    show("screen-home");
+  }
+
+  /* ---------------- connection pill ---------------- */
+  function setConnected(on){
+    $("conn-dot").classList.remove("offline");
+    $("conn-dot").classList.toggle("on", on);
+    $("conn-text").textContent = on ? (userEmail || "Connected") : "Signed out";
+  }
+  function setOfflineIndicator(){
+    $("conn-dot").classList.remove("on");
+    $("conn-dot").classList.add("offline");
+    $("conn-text").textContent = "Offline";
+  }
+
+  /* ---------------- settings / setup / projects ---------------- */
+  $("settings-btn").addEventListener("click", ()=>{
+    fillSetupForm();
+    show("screen-setup");
+  });
+  function fillSetupForm(){
+    renderProjectList();
+  }
+  function renderProjectList(){
+    const host = $("project-list");
+    host.innerHTML = "";
+    const projects = (config && config.projects) || [];
+    if(!projects.length){
+      host.innerHTML = '<div class="empty-photos">No projects yet — add one below to point at a Drive folder.</div>';
+      return;
+    }
+    projects.forEach(p=>{
+      const el = document.createElement("div");
+      el.className = "tag";
+      const isActive = config.activeProjectId === p.id;
+      el.innerHTML = '<span class="tag-name">'+esc(p.name)+(isActive ? ' • active' : '')+'</span><span class="tag-arrow">edit ›</span>';
+      el.addEventListener("click", ()=> openProjectEdit(p.id));
+      host.appendChild(el);
+    });
+  }
+
+  let editingProjectId = null;
+  function openProjectEdit(id){
+    editingProjectId = id;
+    const proj = id ? (config.projects || []).find(p=>p.id===id) : null;
+    $("project-edit-crumb").textContent = proj ? "Edit project" : "Add project";
+    $("proj-name").value = proj ? proj.name : "";
+    $("proj-parent-id").value = proj ? proj.parentId : "";
+    $("proj-use-shared-drive").checked = proj ? !!proj.useSharedDrive : false;
+    $("proj-drive-id").value = proj ? (proj.driveId || "") : "";
+    $("delete-project-btn").style.display = proj ? "inline-flex" : "none";
+    show("screen-project-edit");
+  }
+  $("add-project-btn").addEventListener("click", ()=> openProjectEdit(null));
+  $("back-to-setup-btn").addEventListener("click", ()=>{ fillSetupForm(); show("screen-setup"); });
+  $("save-project-btn").addEventListener("click", ()=>{
+    const name = $("proj-name").value.trim();
+    const parentId = $("proj-parent-id").value.trim();
+    const useSharedDrive = $("proj-use-shared-drive").checked;
+    const driveId = $("proj-drive-id").value.trim();
+    if(!name){ toast("Project name is required", "bad"); return; }
+    config = config || {};
+    config.projects = config.projects || [];
+    if(editingProjectId){
+      const proj = config.projects.find(p=>p.id===editingProjectId);
+      Object.assign(proj, { name, parentId, useSharedDrive, driveId });
+    }else{
+      const id = "proj_" + Date.now().toString(16) + Math.random().toString(16).slice(2);
+      config.projects.push({ id, name, parentId, useSharedDrive, driveId });
+      if(!config.activeProjectId) config.activeProjectId = id;
+    }
+    saveConfig(config);
+    toast("Project saved", "good");
+    refreshActiveProjectUI();
+    fillSetupForm();
+    show("screen-setup");
+  });
+  $("delete-project-btn").addEventListener("click", ()=>{
+    if(!editingProjectId) return;
+    if(!confirm("Delete this project? This only removes it from this device — nothing is deleted in Drive.")) return;
+    config.projects = (config.projects || []).filter(p=>p.id!==editingProjectId);
+    if(config.activeProjectId === editingProjectId){
+      config.activeProjectId = config.projects[0] ? config.projects[0].id : null;
+    }
+    saveConfig(config);
+    toast("Project deleted", "good");
+    refreshActiveProjectUI();
+    fillSetupForm();
+    show("screen-setup");
+  });
+
+  function refreshActiveProjectUI(){
+    const proj = getActiveProject();
+    const name = proj ? proj.name : "No project set";
+    $("drive-target-label").textContent = name;
+    const chipName = $("active-project-name");
+    if(chipName) chipName.textContent = name;
+  }
+  $("project-chip").addEventListener("click", ()=>{
+    renderProjectSwitchList();
+    show("screen-projects");
+  });
+  function renderProjectSwitchList(){
+    const host = $("project-switch-list");
+    host.innerHTML = "";
+    const projects = (config && config.projects) || [];
+    if(!projects.length){
+      host.innerHTML = '<div class="empty-photos">No projects configured yet — add one in Manage projects below.</div>';
+      return;
+    }
+    projects.forEach(p=>{
+      const el = document.createElement("div");
+      el.className = "tag";
+      const isActive = config.activeProjectId === p.id;
+      el.innerHTML = '<span class="tag-name">'+esc(p.name)+(isActive ? ' • active' : '')+'</span><span class="tag-arrow">'+(isActive ? '✓' : '→')+'</span>';
+      el.addEventListener("click", ()=>{
+        config.activeProjectId = p.id;
+        saveConfig(config);
+        refreshActiveProjectUI();
+        toast("Switched to " + p.name, "good");
+        routeHome();
+      });
+      host.appendChild(el);
+    });
+  }
+  $("manage-projects-btn").addEventListener("click", ()=>{
+    fillSetupForm();
+    show("screen-setup");
+  });
+
+  /* ---------------- auth (handled by the server) ---------------- */
+  function initAuth(){
+    refreshActiveProjectUI();
+    if(!navigator.onLine){
+      // No point waiting on a network call that can't succeed — let the
+      // person straight in. Anything already opened before (Recently
+      // opened) works fully offline; new assets and search still need a
+      // connection, and are gated where they're used.
+      enterOfflineMode();
+      return;
+    }
+    checkSession();
+  }
+  async function checkSession(){
+    show("screen-signin");
+    $("signin-checking").style.display = "block";
+    $("signin-manual").style.display = "none";
+    try{
+      const res = await fetch("/api/whoami");
+      const data = await res.json();
+      if(data.signedIn){
+        userEmail = data.email || null;
+        setConnected(true);
+        routeHome();
+      }else{
+        revealManualSignIn();
+      }
+    }catch(e){
+      // a real network hiccup even though navigator.onLine said we were online
+      enterOfflineMode();
+    }
+  }
+  function enterOfflineMode(){
+    setOfflineIndicator();
+    routeHome();
+    toast("No connection — open a recent asset to keep shooting. New assets and search need a connection.", "bad");
+  }
+  function revealManualSignIn(){
+    $("signin-checking").style.display = "none";
+    $("signin-manual").style.display = "flex";
+  }
+  // Whenever the browser regains a connection — no matter what screen is
+  // showing, including mid-shoot — quietly recheck the session in the
+  // background. This never interrupts whatever the person is doing; it
+  // just makes the connection pill go green again on its own.
+  window.addEventListener("online", async ()=>{
+    updateOfflineTileState();
+    if(userEmail) return; // already signed in, nothing to recheck
+    try{
+      const res = await fetch("/api/whoami");
+      const data = await res.json();
+      if(data.signedIn){
+        userEmail = data.email || null;
+        setConnected(true);
+        toast("Back online — reconnected to Drive", "good");
+      }
+    }catch(e){ /* stay quiet, will retry on the next reconnect */ }
+  });
+  window.addEventListener("offline", ()=>{
+    updateOfflineTileState();
+  });
+  function updateOfflineTileState(){
+    const offline = !navigator.onLine;
+    $("tile-new").style.opacity = offline ? "0.55" : "1";
+    $("tile-search").style.opacity = offline ? "0.55" : "1";
+  }
+  $("conn-pill").addEventListener("click", ()=>{
+    if(!userEmail) return; // already signed out, nothing to switch
+    if(!confirm("Sign out of this Google account on this device and choose a different one?")) return;
+    fetch("/auth/signout", { method: "POST" }).finally(()=>{
+      userEmail = null;
+      setConnected(false);
+      revealManualSignIn();
+      show("screen-signin");
+    });
+  });
+  $("signin-btn").addEventListener("click", ()=>{
+    // A full page navigation, not a fetch — this is a real OAuth redirect
+    // to Google and back, always showing the account chooser rather than
+    // silently reusing whichever account this browser used last.
+    window.location.href = "/auth/start";
+  });
+  $("switch-account-btn").addEventListener("click", ()=>{
+    window.location.href = "/auth/start";
+  });
+
+  // Every Drive-backed call goes through this so a session that's expired
+  // or been revoked drops back to the sign-in screen consistently, instead
+  // of each caller handling it differently.
+  async function apiFetch(url, options){
+    const res = await fetch(url, options);
+    if(res.status === 401){
+      userEmail = null;
+      setConnected(false);
+      revealManualSignIn();
+      show("screen-signin");
+      throw new Error("Please sign in again");
+    }
+    return res;
+  }
+
+  /* ---------------- Drive API helpers (via our own server) ---------------- */
+
+  // A project can leave the parent folder blank to mean "the top level" —
+  // for My Drive that's the literal alias 'root'; for a Shared Drive, the
+  // top level's ID is the Shared Drive's own ID.
+  function resolveParentId(proj){
+    if(proj.parentId) return proj.parentId;
+    if(proj.useSharedDrive && proj.driveId) return proj.driveId;
+    return "root";
+  }
+
+  async function createFolder(name){
+    const proj = getActiveProject();
+    if(!proj) throw new Error("No project selected — add one in Settings");
+    const res = await apiFetch("/api/create-folder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: name,
+        parentId: resolveParentId(proj),
+        driveId: proj.useSharedDrive ? (proj.driveId || null) : null
+      })
+    });
+    if(!res.ok){ throw new Error("Could not create folder (" + res.status + ")"); }
+    return res.json();
+  }
+
+  async function searchFolders(term, pageToken){
+    const proj = getActiveProject();
+    if(!proj) throw new Error("No project selected — add one in Settings");
+    const params = new URLSearchParams({ parentId: resolveParentId(proj) });
+    if(proj.useSharedDrive && proj.driveId) params.set("driveId", proj.driveId);
+    if(term && term.trim()) params.set("term", term.trim());
+    if(pageToken) params.set("pageToken", pageToken);
+    const res = await apiFetch("/api/search-folders?" + params.toString());
+    if(!res.ok){ throw new Error("Search failed (" + res.status + ")"); }
+    return res.json();
+  }
+
+  async function uploadPhotoToFolder(file, folderId, fileName){
+    const form = new FormData();
+    form.append("file", file, fileName || "photo.jpg");
+    form.append("fileName", fileName || file.name || "photo.jpg");
+    form.append("folderId", folderId);
+    const res = await apiFetch("/api/upload-photo", { method: "POST", body: form });
+    if(!res.ok){ throw new Error("Upload failed (" + res.status + ")"); }
+    return res.json();
+  }
+
+  /* ---------------- home / recent ---------------- */
+  function renderRecent(){
+    const list = loadRecent();
+    const host = $("recent-list");
+    host.innerHTML = "";
+    if(!list.length){
+      host.innerHTML = '<div class="empty-photos">Assets you open will show up here for quick re-access.</div>';
+      return;
+    }
+    list.forEach(f=>{
+      const el = document.createElement("div");
+      el.className = "tag";
+      el.innerHTML = '<span class="tag-name">'+esc(f.name)+'</span><span class="tag-arrow">→</span>';
+      el.addEventListener("click", ()=> openCapture(f));
+      host.appendChild(el);
+    });
+  }
+
+  /* ---------------- new asset flow ---------------- */
+  $("tile-new").addEventListener("click", ()=>{
+    if(!getActiveProject()){ toast("Add a project first", "bad"); fillSetupForm(); show("screen-setup"); return; }
+    if(!navigator.onLine){ toast("No connection — creating a new asset needs Drive access. Try again once you're back in range.", "bad"); return; }
+    $("new-asset-name").value = "";
+    show("screen-new");
+    setTimeout(()=> $("new-asset-name").focus(), 200);
+  });
+  $("create-asset-btn").addEventListener("click", async ()=>{
+    const name = $("new-asset-name").value.trim();
+    if(!name){ toast("Give the asset a name first", "bad"); return; }
+    const btn = $("create-asset-btn");
+    btn.disabled = true; btn.textContent = "Creating folder…";
+    try{
+      const folder = await createFolder(name);
+      addRecent({ id: folder.id, name: folder.name });
+      toast("Asset folder created", "good");
+      openCapture({ id: folder.id, name: folder.name });
+    }catch(err){
+      toast(err.message || "Could not create folder", "bad");
+    }finally{
+      btn.disabled = false; btn.textContent = "Create folder & start shooting";
+    }
+  });
+
+  /* ---------------- search flow ---------------- */
+  let searchTimer = null;
+  let lastPageToken = null;
+  $("tile-search").addEventListener("click", ()=>{
+    if(!getActiveProject()){ toast("Add a project first", "bad"); fillSetupForm(); show("screen-setup"); return; }
+    if(!navigator.onLine){ toast("No connection — search needs Drive access. Recently opened assets still work offline.", "bad"); return; }
+    $("search-input").value = "";
+    $("search-results").innerHTML = "";
+    show("screen-search");
+    runSearch("");
+    setTimeout(()=> $("search-input").focus(), 200);
+  });
+  $("search-input").addEventListener("input", (e)=>{
+    clearTimeout(searchTimer);
+    const term = e.target.value;
+    searchTimer = setTimeout(()=> runSearch(term), 320);
+  });
+  async function runSearch(term, pageToken){
+    const host = $("search-results");
+    if(!pageToken) host.innerHTML = '<div class="spinner-lg"></div>';
+    try{
+      const data = await searchFolders(term, pageToken);
+      if(!pageToken) host.innerHTML = "";
+      if((!data.files || !data.files.length) && !pageToken){
+        host.innerHTML = '<div class="empty-photos">No matching asset folders. Check the spelling, or create a new asset instead.</div>';
+        return;
+      }
+      (data.files||[]).forEach(f=>{
+        const el = document.createElement("div");
+        el.className = "tag";
+        el.innerHTML = '<span class="tag-name">'+esc(f.name)+'</span><span class="tag-arrow">→</span>';
+        el.addEventListener("click", ()=>{
+          addRecent({ id: f.id, name: f.name });
+          openCapture({ id: f.id, name: f.name });
+        });
+        host.appendChild(el);
+      });
+      lastPageToken = data.nextPageToken;
+      const oldMore = host.querySelector(".load-more");
+      if(oldMore) oldMore.remove();
+      if(lastPageToken){
+        const more = document.createElement("div");
+        more.className = "load-more";
+        more.textContent = "Load more results";
+        more.addEventListener("click", ()=> runSearch(term, lastPageToken));
+        host.appendChild(more);
+      }
+    }catch(err){
+      host.innerHTML = "";
+      toast(err.message || "Search failed", "bad");
+    }
+  }
+
+  /* ---------------- capture flow ---------------- */
+  function openCapture(folder){
+    currentFolder = folder;
+    photos = [];
+    $("capture-asset-name").textContent = folder.name;
+    closeLiveCamera(); // in case a previous session left the camera running
+    renderPhotoGrid();
+    show("screen-capture");
+    loadQueuedForFolder(folder.id);
+  }
+  // If this folder already has photos waiting from an earlier offline session, show them.
+  async function loadQueuedForFolder(folderId){
+    try{
+      const rows = await dbGetAll();
+      rows.filter(r=>r.folderId===folderId).forEach(row=>{
+        photos.push({ localId: row.id, dataUrl: row.dataUrl, status: "queued" });
+      });
+      renderPhotoGrid();
+    }catch(e){ /* ignore */ }
+  }
+
+  /* ---------------- live camera (stays open across many shots) ---------------- */
+  let mediaStream = null;
+  let liveShotCount = 0;
+
+  async function openLiveCamera(){
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      toast("This browser can't open a live camera here — using single-photo mode instead", "bad");
+      $("camera-input").click();
+      return;
+    }
+    try{
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false
+      });
+    }catch(err){
+      toast("Couldn't access the camera — check camera permission for this site", "bad");
+      return;
+    }
+    $("camera-video").srcObject = mediaStream;
+    liveShotCount = 0;
+    $("camera-shot-count").textContent = "0 taken";
+    $("camera-live-thumbs").innerHTML = "";
+    $("capture-normal").style.display = "none";
+    $("camera-live").style.display = "flex";
+  }
+
+  function closeLiveCamera(){
+    if(mediaStream){
+      mediaStream.getTracks().forEach(t=>t.stop());
+      mediaStream = null;
+    }
+    $("camera-video").srcObject = null;
+    $("camera-live").style.display = "none";
+    $("capture-normal").style.display = "flex";
+    renderPhotoGrid();
+  }
+
+  async function captureLiveFrame(){
+    const video = $("camera-video");
+    if(!video.videoWidth){ return; } // not ready yet
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise(res => canvas.toBlob(res, "image/jpeg", 0.92));
+    if(!blob) return;
+
+    // quick shutter-flash feedback so a rapid tap always feels acknowledged
+    const flash = $("camera-flash");
+    flash.classList.add("hit");
+    setTimeout(()=> flash.classList.remove("hit"), 90);
+
+    liveShotCount++;
+    $("camera-shot-count").textContent = liveShotCount + (liveShotCount===1 ? " taken" : " taken");
+
+    const thumb = document.createElement("img");
+    thumb.src = URL.createObjectURL(blob);
+    $("camera-live-thumbs").prepend(thumb);
+
+    await stagePhoto(blob);
+  }
+
+  $("open-camera-btn").addEventListener("click", openLiveCamera);
+  $("close-camera-btn").addEventListener("click", closeLiveCamera);
+  $("live-shutter-btn").addEventListener("click", captureLiveFrame);
+
+  $("library-btn").addEventListener("click", ()=> $("library-input").click());
+  $("camera-input").addEventListener("change", (e)=> handleNewFiles(e.target.files, e.target));
+  $("library-input").addEventListener("change", (e)=> handleNewFiles(e.target.files, e.target));
+
+  async function handleNewFiles(fileList, inputEl){
+    const files = Array.from(fileList || []);
+    inputEl.value = "";
+    for(const file of files){
+      await stagePhoto(file);
+    }
+  }
+
+  async function stagePhoto(file){
+    const localId = "p" + Date.now().toString(16) + Math.random().toString(16).slice(2);
+    const fileName = uniqueFileName(currentFolder.name, file.type);
+    const reader = new FileReader();
+    const dataUrl = await new Promise(res=>{ reader.onload = ()=> res(reader.result); reader.readAsDataURL(file); });
+
+    // Save to durable storage immediately — this is what makes a photo
+    // survive a closed tab or a dead zone, whether or not it's uploaded
+    // right away. Nothing is uploaded until "Upload photos" is tapped
+    // (or the background sync picks it up as a safety net).
+    await dbPut({ id: localId, folderId: currentFolder.id, folderName: currentFolder.name, fileName, blob: file, dataUrl });
+    await updatePendingPill();
+
+    photos.unshift({ localId, dataUrl, status: "queued" });
+    renderPhotoGrid();
+  }
+
+  async function uploadOne(record){
+    record.status = "uploading";
+    renderPhotoGrid();
+    const row = await dbGet(record.localId);
+    if(!row){ record.status = "done"; renderPhotoGrid(); return; } // already uploaded elsewhere (e.g. background sync)
+    try{
+      await uploadPhotoToFolder(row.blob, row.folderId, row.fileName);
+      await dbDelete(row.id);
+      await updatePendingPill();
+      record.status = "done";
+    }catch(err){
+      record.status = "queued";
+    }
+    renderPhotoGrid();
+  }
+
+  async function uploadAllStaged(){
+    if(!navigator.onLine){ toast("No connection right now — these will upload automatically once you're back in range", "bad"); return; }
+    const targets = photos.filter(p=>p.status==="queued");
+    if(!targets.length) return;
+    const btn = $("upload-batch-btn");
+    btn.disabled = true;
+    btn.textContent = "Uploading…";
+    for(const rec of targets){
+      await uploadOne(rec);
+    }
+    btn.disabled = false;
+    updateBatchButton();
+  }
+  $("upload-batch-btn").addEventListener("click", uploadAllStaged);
+
+  function updateBatchButton(){
+    const btn = $("upload-batch-btn");
+    const count = photos.filter(p=>p.status!=="done").length;
+    if(count > 0){
+      btn.style.display = "flex";
+      btn.textContent = "Upload " + count + (count===1 ? " photo" : " photos");
+    }else{
+      btn.style.display = "none";
+    }
+  }
+
+  function renderPhotoGrid(){
+    $("capture-count").textContent = photos.length + (photos.length===1 ? " photo" : " photos");
+    const grid = $("photo-grid");
+    const empty = $("empty-photos");
+    updateBatchButton();
+    if(!photos.length){
+      grid.style.display = "none";
+      empty.style.display = "block";
+      return;
+    }
+    empty.style.display = "none";
+    grid.style.display = "grid";
+    grid.innerHTML = "";
+    photos.forEach(p=>{
+      const cell = document.createElement("div");
+      cell.className = "photo-cell";
+      const statusHtml = p.status === "uploading"
+        ? '<div class="photo-status uploading"><div class="spin"></div></div>'
+        : p.status === "queued"
+          ? '<div class="photo-status queued" title="Not uploaded yet — tap to upload just this one">⏳</div>'
+          : p.status === "error"
+            ? '<div class="photo-status error">!</div>'
+            : '<div class="photo-status done">✓</div>';
+      cell.innerHTML = '<img src="'+p.dataUrl+'">' + statusHtml;
+      if(p.status === "queued"){
+        cell.addEventListener("click", ()=>{
+          if(!navigator.onLine){ toast("Still offline", "bad"); return; }
+          uploadOne(p);
+        });
+      }
+      grid.appendChild(cell);
+    });
+  }
+  $("done-btn").addEventListener("click", ()=>{
+    routeHome();
+  });
+
+  /* ---------------- boot ---------------- */
+  (function boot(){
+    const urlParams = new URLSearchParams(window.location.search);
+    const authError = urlParams.get("auth_error");
+    if(authError){
+      toast("Sign-in didn't complete (" + authError + ") — please try again", "bad");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+    updatePendingPill().then(()=>{ if(navigator.onLine) flushQueue(); });
+    if("serviceWorker" in navigator){
+      navigator.serviceWorker.register("./sw.js").catch(()=>{ /* offline app-shell caching is a bonus, not required */ });
+    }
+    initAuth();
+  })();
+
+})();
+</script>
+</body>
+</html>
