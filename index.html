@@ -121,6 +121,15 @@
   .tag-meta{font-size:11px;color:var(--muted-2);flex-shrink:0;}
   .tag-arrow{color:var(--muted-2);flex-shrink:0;}
   .tag-list{display:flex;flex-direction:column;gap:8px;}
+  .tag-star{
+    flex-shrink:0;width:32px;height:32px;border-radius:8px;border:none;background:transparent;
+    display:flex;align-items:center;justify-content:center;color:var(--muted-2);cursor:pointer;font-size:18px;
+  }
+  .tag-star.on{color:var(--accent);}
+  .tag-badge{
+    font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-2);
+    background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:2px 6px;flex-shrink:0;
+  }
 
   /* Forms */
   label.field-label{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:7px;}
@@ -288,6 +297,12 @@
         <input type="text" id="proj-drive-id" placeholder="Shared Drive ID (optional)">
         <div class="hint">Only needed if the folder above lives inside a Shared Drive, not My Drive.</div>
       </div>
+      <div class="field" id="proj-shared-field">
+        <label class="field-label" style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <input type="checkbox" id="proj-shared"> Share this with everyone
+        </label>
+        <div class="hint" id="proj-shared-hint">Anyone signed in will see this project automatically — no manual adding required on their end. Best for company shared-drive folders. Leave unchecked to keep it private to you (e.g. a personal Drive folder).</div>
+      </div>
       <div class="btn-row">
         <button class="btn btn-ghost" id="delete-project-btn" style="display:none;color:var(--bad);border-color:var(--bad-soft);">Delete</button>
         <button class="btn btn-accent" id="save-project-btn">Save project</button>
@@ -424,26 +439,62 @@
   "use strict";
 
   /* ---------------- config / storage ---------------- */
-  const CFG_KEY = "assetTracker.config.v1";
   const RECENT_KEY = "assetTracker.recent.v1";
+  const ACTIVE_PROJECT_KEY = "assetTracker.activeProjectId.v1";
+  const PROJECTS_CACHE_KEY = "assetTracker.projectsCache.v1";
 
-  function loadConfig(){
-    let c;
-    try{ c = JSON.parse(localStorage.getItem(CFG_KEY) || "null"); }catch(e){ c = null; }
-    if(c && !c.projects){
-      // migrate from the old single-parent-folder shape
-      const proj = { id: "proj_default", name: c.label || "Default project", parentId: c.parentId, useSharedDrive: !!c.useSharedDrive, driveId: c.driveId || "" };
-      c = { projects: proj.parentId ? [proj] : [], activeProjectId: proj.parentId ? proj.id : null };
-      saveConfig(c);
-    }
-    if(!c) c = { projects: [], activeProjectId: null };
-    return c;
+  // Projects (both shared and personal) and favorites live on the server,
+  // tied to the signed-in account — that's what makes a project created on
+  // one device show up on every other device signed into the same account.
+  // Which project is "active" right now stays local to each device on
+  // purpose: you might genuinely want your phone pointed at a different
+  // project than your computer at the same moment.
+  let allProjects = { shared: [], personal: [] };
+  let favoriteIds = [];
+
+  function cacheProjectsLocally(){
+    try{ localStorage.setItem(PROJECTS_CACHE_KEY, JSON.stringify({ allProjects, favoriteIds })); }catch(e){ /* ignore */ }
   }
-  function saveConfig(cfg){ localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); }
+  function loadCachedProjectsLocally(){
+    try{
+      const c = JSON.parse(localStorage.getItem(PROJECTS_CACHE_KEY) || "null");
+      if(c){ allProjects = c.allProjects || allProjects; favoriteIds = c.favoriteIds || favoriteIds; }
+    }catch(e){ /* ignore */ }
+  }
+  async function loadProjectsFromServer(){
+    try{
+      const [projRes, favRes] = await Promise.all([
+        apiFetch("/api/projects"),
+        apiFetch("/api/favorites"),
+      ]);
+      if(projRes.ok){
+        const d = await projRes.json();
+        allProjects = { shared: d.shared || [], personal: d.personal || [] };
+      }
+      if(favRes.ok){
+        const d = await favRes.json();
+        favoriteIds = d.favorites || [];
+      }
+      cacheProjectsLocally();
+    }catch(e){ /* offline or session expired — keep whatever's cached */ }
+    refreshActiveProjectUI();
+  }
+
+  function allProjectsFlat(){
+    return (allProjects.shared || []).concat(allProjects.personal || []);
+  }
+  function getActiveProjectId(){ return localStorage.getItem(ACTIVE_PROJECT_KEY) || null; }
+  function setActiveProjectId(id){ localStorage.setItem(ACTIVE_PROJECT_KEY, id); }
   function getActiveProject(){
-    if(!config || !config.projects) return null;
-    return config.projects.find(p=>p.id===config.activeProjectId) || config.projects[0] || null;
+    const flat = allProjectsFlat();
+    const id = getActiveProjectId();
+    if(id){
+      const found = flat.find(p=>p.id===id);
+      if(found) return found;
+    }
+    return flat[0] || null;
   }
+
   function loadRecentMap(){
     let raw;
     try{ raw = JSON.parse(localStorage.getItem(RECENT_KEY) || "{}"); }catch(e){ raw = {}; }
@@ -469,10 +520,11 @@
     saveRecentMap(map);
   }
 
-  let config = loadConfig();
+  loadCachedProjectsLocally();
   let userEmail = null; // set once /api/whoami confirms an active server-side session
   let currentFolder = null; // {id, name}
   let photos = []; // {localId, name, dataUrl, status, driveId}
+
 
   const $ = (id) => document.getElementById(id);
 
@@ -646,69 +698,112 @@
   function renderProjectList(){
     const host = $("project-list");
     host.innerHTML = "";
-    const projects = (config && config.projects) || [];
-    if(!projects.length){
-      host.innerHTML = '<div class="empty-photos">No projects yet — add one below to point at a Drive folder.</div>';
-      return;
-    }
-    projects.forEach(p=>{
-      const el = document.createElement("div");
-      el.className = "tag";
-      const isActive = config.activeProjectId === p.id;
-      el.innerHTML = '<span class="tag-name">'+esc(p.name)+(isActive ? ' • active' : '')+'</span><span class="tag-arrow">edit ›</span>';
-      el.addEventListener("click", ()=> openProjectEdit(p.id));
-      host.appendChild(el);
+    const activeId = getActiveProjectId();
+    const sections = [
+      ["Shared projects", allProjects.shared || []],
+      ["My projects", allProjects.personal || []],
+    ];
+    let any = false;
+    sections.forEach(([label, list])=>{
+      if(!list.length) return;
+      any = true;
+      const heading = document.createElement("div");
+      heading.className = "section-label";
+      heading.style.marginTop = "10px";
+      heading.textContent = label;
+      host.appendChild(heading);
+      list.forEach(p=>{
+        const el = document.createElement("div");
+        el.className = "tag";
+        const isActive = activeId === p.id;
+        el.innerHTML = '<span class="tag-name">'+esc(p.name)+(isActive ? ' • active' : '')+'</span><span class="tag-arrow">edit ›</span>';
+        el.addEventListener("click", ()=> openProjectEdit(p.id));
+        host.appendChild(el);
+      });
     });
+    if(!any){
+      host.innerHTML = '<div class="empty-photos">No projects yet — add one below to point at a Drive folder.</div>';
+    }
   }
 
   let editingProjectId = null;
   function openProjectEdit(id){
     editingProjectId = id;
-    const proj = id ? (config.projects || []).find(p=>p.id===id) : null;
+    const proj = id ? allProjectsFlat().find(p=>p.id===id) : null;
+    const isShared = proj ? proj.id.startsWith("shared_") : false;
     $("project-edit-crumb").textContent = proj ? "Edit project" : "Add project";
     $("proj-name").value = proj ? proj.name : "";
     $("proj-parent-id").value = proj ? proj.parentId : "";
     $("proj-use-shared-drive").checked = proj ? !!proj.useSharedDrive : false;
     $("proj-drive-id").value = proj ? (proj.driveId || "") : "";
+    $("proj-shared").checked = isShared;
+    // Whether a project is shared or personal is fixed at creation — changing
+    // scope later would mean it needs a different owner record entirely, so
+    // simplest and clearest is: delete and recreate if that's really needed.
+    $("proj-shared").disabled = !!proj;
+    $("proj-shared-hint").textContent = proj
+      ? (isShared ? "This project is shared with everyone." : "This is a personal project, only visible to you.")
+      : "Anyone signed in will see this project automatically — no manual adding required on their end. Best for company shared-drive folders. Leave unchecked to keep it private to you (e.g. a personal Drive folder).";
     $("delete-project-btn").style.display = proj ? "inline-flex" : "none";
     show("screen-project-edit");
   }
   $("add-project-btn").addEventListener("click", ()=> openProjectEdit(null));
   $("back-to-setup-btn").addEventListener("click", ()=>{ fillSetupForm(); show("screen-setup"); });
-  $("save-project-btn").addEventListener("click", ()=>{
+  $("save-project-btn").addEventListener("click", async ()=>{
     const name = $("proj-name").value.trim();
     const parentId = $("proj-parent-id").value.trim();
     const useSharedDrive = $("proj-use-shared-drive").checked;
     const driveId = $("proj-drive-id").value.trim();
+    const shared = $("proj-shared").checked;
     if(!name){ toast("Project name is required", "bad"); return; }
-    config = config || {};
-    config.projects = config.projects || [];
-    if(editingProjectId){
-      const proj = config.projects.find(p=>p.id===editingProjectId);
-      Object.assign(proj, { name, parentId, useSharedDrive, driveId });
-    }else{
-      const id = "proj_" + Date.now().toString(16) + Math.random().toString(16).slice(2);
-      config.projects.push({ id, name, parentId, useSharedDrive, driveId });
-      if(!config.activeProjectId) config.activeProjectId = id;
+    const btn = $("save-project-btn");
+    btn.disabled = true;
+    try{
+      if(editingProjectId){
+        const res = await apiFetch("/api/projects/" + encodeURIComponent(editingProjectId), {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, parentId, useSharedDrive, driveId })
+        });
+        if(!res.ok) throw new Error("Could not save project");
+      }else{
+        const res = await apiFetch("/api/projects", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, parentId, useSharedDrive, driveId, shared })
+        });
+        if(!res.ok) throw new Error("Could not create project");
+        const data = await res.json();
+        if(!getActiveProjectId() && data.project) setActiveProjectId(data.project.id);
+      }
+      await loadProjectsFromServer();
+      toast("Project saved", "good");
+      fillSetupForm();
+      show("screen-setup");
+    }catch(err){
+      toast(err.message || "Could not save project", "bad");
+    }finally{
+      btn.disabled = false;
     }
-    saveConfig(config);
-    toast("Project saved", "good");
-    refreshActiveProjectUI();
-    fillSetupForm();
-    show("screen-setup");
   });
-  $("delete-project-btn").addEventListener("click", ()=>{
+  $("delete-project-btn").addEventListener("click", async ()=>{
     if(!editingProjectId) return;
-    if(!confirm("Delete this project? This only removes it from this device — nothing is deleted in Drive.")) return;
-    config.projects = (config.projects || []).filter(p=>p.id!==editingProjectId);
-    if(config.activeProjectId === editingProjectId){
-      config.activeProjectId = config.projects[0] ? config.projects[0].id : null;
+    const isShared = editingProjectId.startsWith("shared_");
+    const warning = isShared
+      ? "Delete this SHARED project? It will disappear for everyone in the company, not just you."
+      : "Delete this project? This only removes it from your account — nothing is deleted in Drive.";
+    if(!confirm(warning)) return;
+    try{
+      const res = await apiFetch("/api/projects/" + encodeURIComponent(editingProjectId), { method: "DELETE" });
+      if(!res.ok) throw new Error("Could not delete project");
+      if(getActiveProjectId() === editingProjectId) setActiveProjectId("");
+      await loadProjectsFromServer();
+      toast("Project deleted", "good");
+      fillSetupForm();
+      show("screen-setup");
+    }catch(err){
+      toast(err.message || "Could not delete project", "bad");
     }
-    saveConfig(config);
-    toast("Project deleted", "good");
-    refreshActiveProjectUI();
-    fillSetupForm();
-    show("screen-setup");
   });
 
   function refreshActiveProjectUI(){
@@ -722,27 +817,74 @@
     renderProjectSwitchList();
     show("screen-projects");
   });
+
+  function projectRow(p, activeId){
+    const el = document.createElement("div");
+    el.className = "tag";
+    const isActive = activeId === p.id;
+    const isShared = p.id.startsWith("shared_");
+    const isFav = favoriteIds.includes(p.id);
+    el.innerHTML =
+      '<button class="tag-star ' + (isFav ? "on" : "") + '" title="Favorite" data-star>' + (isFav ? "★" : "☆") + '</button>' +
+      '<span class="tag-name">' + esc(p.name) + (isActive ? " • active" : "") + '</span>' +
+      '<span class="tag-badge">' + (isShared ? "Shared" : "Mine") + '</span>' +
+      '<span class="tag-arrow">' + (isActive ? "✓" : "→") + '</span>';
+    el.querySelector("[data-star]").addEventListener("click", (e)=>{
+      e.stopPropagation();
+      toggleFavorite(p.id);
+    });
+    el.addEventListener("click", ()=>{
+      setActiveProjectId(p.id);
+      refreshActiveProjectUI();
+      toast("Switched to " + p.name, "good");
+      routeHome();
+    });
+    return el;
+  }
+  async function toggleFavorite(id){
+    try{
+      const res = await apiFetch("/api/favorites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id })
+      });
+      if(res.ok){
+        const data = await res.json();
+        favoriteIds = data.favorites || [];
+        cacheProjectsLocally();
+        renderProjectSwitchList();
+      }
+    }catch(e){ toast("Couldn't update favorites — try again once you're online", "bad"); }
+  }
   function renderProjectSwitchList(){
     const host = $("project-switch-list");
     host.innerHTML = "";
-    const projects = (config && config.projects) || [];
-    if(!projects.length){
+    const activeId = getActiveProjectId();
+    const flat = allProjectsFlat();
+    if(!flat.length){
       host.innerHTML = '<div class="empty-photos">No projects configured yet — add one in Manage projects below.</div>';
       return;
     }
-    projects.forEach(p=>{
-      const el = document.createElement("div");
-      el.className = "tag";
-      const isActive = config.activeProjectId === p.id;
-      el.innerHTML = '<span class="tag-name">'+esc(p.name)+(isActive ? ' • active' : '')+'</span><span class="tag-arrow">'+(isActive ? '✓' : '→')+'</span>';
-      el.addEventListener("click", ()=>{
-        config.activeProjectId = p.id;
-        saveConfig(config);
-        refreshActiveProjectUI();
-        toast("Switched to " + p.name, "good");
-        routeHome();
-      });
-      host.appendChild(el);
+    const favs = flat.filter(p=>favoriteIds.includes(p.id));
+    if(favs.length){
+      const heading = document.createElement("div");
+      heading.className = "section-label";
+      heading.textContent = "★ Favorites";
+      host.appendChild(heading);
+      favs.forEach(p=> host.appendChild(projectRow(p, activeId)));
+    }
+    const sections = [
+      ["Shared projects", allProjects.shared || []],
+      ["My projects", allProjects.personal || []],
+    ];
+    sections.forEach(([label, list])=>{
+      if(!list.length) return;
+      const heading = document.createElement("div");
+      heading.className = "section-label";
+      heading.style.marginTop = "10px";
+      heading.textContent = label;
+      host.appendChild(heading);
+      list.forEach(p=> host.appendChild(projectRow(p, activeId)));
     });
   }
   $("manage-projects-btn").addEventListener("click", ()=>{
@@ -774,6 +916,7 @@
         userEmail = data.email || null;
         setConnected(true);
         routeHome();
+        loadProjectsFromServer();
       }else{
         revealManualSignIn();
       }
@@ -797,7 +940,7 @@
   // just makes the connection pill go green again on its own.
   window.addEventListener("online", async ()=>{
     updateOfflineTileState();
-    if(userEmail) return; // already signed in, nothing to recheck
+    if(userEmail){ loadProjectsFromServer(); return; } // already signed in — just refresh in case something changed elsewhere
     try{
       const res = await fetch("/api/whoami");
       const data = await res.json();
@@ -805,6 +948,7 @@
         userEmail = data.email || null;
         setConnected(true);
         toast("Back online — reconnected to Drive", "good");
+        loadProjectsFromServer();
       }
     }catch(e){ /* stay quiet, will retry on the next reconnect */ }
   });
