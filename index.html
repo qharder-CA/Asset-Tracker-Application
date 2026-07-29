@@ -59,6 +59,7 @@
   }
   .dot{width:7px;height:7px;border-radius:50%;background:var(--muted-2);}
   .dot.on{background:var(--good);}
+  .dot.offline{background:var(--accent);}
 
   /* ---------- main ---------- */
   main{flex:1;display:flex;flex-direction:column;max-width:720px;width:100%;margin:0 auto;padding:20px 18px 100px;}
@@ -643,13 +644,20 @@
     closeLiveCamera();
     renderRecent();
     refreshActiveProjectUI();
+    updateOfflineTileState();
     show("screen-home");
   }
 
   /* ---------------- connection pill ---------------- */
   function setConnected(on){
+    $("conn-dot").classList.remove("offline");
     $("conn-dot").classList.toggle("on", on);
     $("conn-text").textContent = on ? "Connected" : "Signed out";
+  }
+  function setOfflineIndicator(){
+    $("conn-dot").classList.remove("on");
+    $("conn-dot").classList.add("offline");
+    $("conn-text").textContent = "Offline";
   }
 
   /* ---------------- settings / setup / projects ---------------- */
@@ -785,15 +793,11 @@
   });
 
   /* ---------------- Google auth ---------------- */
-  function initAuth(){
-    if(!config || !config.clientId){
-      show("screen-setup");
-      return;
-    }
-    refreshActiveProjectUI();
+  let tokenClientWaiters = [];
+  function ensureTokenClientReady(){
+    if(tokenClient) return;
     if(!window.google || !google.accounts){
-      // GIS script not ready yet, retry shortly
-      setTimeout(initAuth, 250);
+      setTimeout(ensureTokenClientReady, 300);
       return;
     }
     tokenClient = google.accounts.oauth2.initTokenClient({
@@ -812,7 +816,34 @@
         routeHome();
       }
     });
-    attemptSilentReconnect();
+    tokenClientWaiters.forEach(fn=>fn());
+    tokenClientWaiters = [];
+  }
+  function whenTokenClientReady(cb){
+    if(tokenClient) cb(); else tokenClientWaiters.push(cb);
+  }
+
+  function initAuth(){
+    if(!config || !config.clientId){
+      show("screen-setup");
+      return;
+    }
+    refreshActiveProjectUI();
+    ensureTokenClientReady(); // keeps trying quietly in the background regardless of connectivity
+    if(!navigator.onLine){
+      // No point waiting on a network call that can't succeed — let the
+      // person straight in. Anything already opened before (Recently
+      // opened) works fully offline; new assets and search still need a
+      // connection, and are gated where they're used.
+      enterOfflineMode();
+      return;
+    }
+    whenTokenClientReady(attemptSilentReconnect);
+  }
+  function enterOfflineMode(){
+    setOfflineIndicator();
+    routeHome();
+    toast("No connection — open a recent asset to keep shooting. New assets and search need a connection.", "bad");
   }
   function revealManualSignIn(){
     $("signin-checking").style.display = "none";
@@ -849,6 +880,35 @@
       routeHome();
     };
     tokenClient.requestAccessToken({ prompt: "none" });
+  }
+  // Whenever the browser regains a connection — no matter what screen is
+  // showing, including mid-shoot — quietly try to reconnect in the
+  // background. This never interrupts whatever the person is doing; it
+  // just makes the connection pill go green again on its own.
+  window.addEventListener("online", ()=>{
+    updateOfflineTileState();
+    ensureTokenClientReady();
+    whenTokenClientReady(()=>{
+      if(accessToken && Date.now() < tokenExpiry){ setConnected(true); return; }
+      const prevCallback = tokenClient.callback;
+      tokenClient.callback = (resp)=>{
+        tokenClient.callback = prevCallback;
+        if(resp.error) return; // stay quiet — a manual sign-in still works if they navigate there
+        accessToken = resp.access_token;
+        tokenExpiry = Date.now() + (resp.expires_in ? resp.expires_in*1000 : 3000*1000) - 60000;
+        setConnected(true);
+        toast("Back online — reconnected to Drive", "good");
+      };
+      tokenClient.requestAccessToken({ prompt: "none" });
+    });
+  });
+  window.addEventListener("offline", ()=>{
+    updateOfflineTileState();
+  });
+  function updateOfflineTileState(){
+    const offline = !navigator.onLine;
+    $("tile-new").style.opacity = offline ? "0.55" : "1";
+    $("tile-search").style.opacity = offline ? "0.55" : "1";
   }
   $("conn-pill").addEventListener("click", ()=>{
     if(!accessToken) return; // already signed out, nothing to switch
@@ -1012,6 +1072,7 @@
   /* ---------------- new asset flow ---------------- */
   $("tile-new").addEventListener("click", ()=>{
     if(!getActiveProject()){ toast("Add a project first", "bad"); fillSetupForm(); show("screen-setup"); return; }
+    if(!navigator.onLine){ toast("No connection — creating a new asset needs Drive access. Try again once you're back in range.", "bad"); return; }
     $("new-asset-name").value = "";
     show("screen-new");
     setTimeout(()=> $("new-asset-name").focus(), 200);
@@ -1038,6 +1099,7 @@
   let lastPageToken = null;
   $("tile-search").addEventListener("click", ()=>{
     if(!getActiveProject()){ toast("Add a project first", "bad"); fillSetupForm(); show("screen-setup"); return; }
+    if(!navigator.onLine){ toast("No connection — search needs Drive access. Recently opened assets still work offline.", "bad"); return; }
     $("search-input").value = "";
     $("search-results").innerHTML = "";
     show("screen-search");
@@ -1291,14 +1353,7 @@
       fillSetupForm();
       show("screen-setup");
     }else{
-      refreshActiveProjectUI();
-      // wait for GIS script
-      const check = setInterval(()=>{
-        if(window.google && google.accounts){
-          clearInterval(check);
-          initAuth();
-        }
-      }, 150);
+      initAuth();
     }
   })();
 
