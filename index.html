@@ -446,6 +446,26 @@
   /* ---------------- config / storage ---------------- */
   const CFG_KEY = "assetTracker.config.v1";
   const RECENT_KEY = "assetTracker.recent.v1";
+  const TOKEN_KEY = "assetTracker.token.v1";
+
+  // Google only issues short-lived access tokens to a client-side app like
+  // this one (no server to safely hold a long-lived refresh token) — but
+  // there's no reason to throw away a still-valid token just because the
+  // tab or app got closed. Caching it means reopening within its ~1 hour
+  // lifetime needs no contact with Google at all.
+  function persistToken(){
+    try{ localStorage.setItem(TOKEN_KEY, JSON.stringify({ accessToken, tokenExpiry })); }catch(e){ /* ignore */ }
+  }
+  function loadPersistedToken(){
+    try{
+      const cached = JSON.parse(localStorage.getItem(TOKEN_KEY) || "null");
+      if(cached && cached.accessToken && cached.tokenExpiry > Date.now()) return cached;
+    }catch(e){ /* ignore */ }
+    return null;
+  }
+  function clearPersistedToken(){
+    try{ localStorage.removeItem(TOKEN_KEY); }catch(e){ /* ignore */ }
+  }
 
   function loadConfig(){
     let c;
@@ -812,6 +832,7 @@
         }
         accessToken = resp.access_token;
         tokenExpiry = Date.now() + (resp.expires_in ? resp.expires_in*1000 : 3000*1000) - 60000;
+        persistToken();
         setConnected(true);
         routeHome();
       }
@@ -829,6 +850,15 @@
       return;
     }
     refreshActiveProjectUI();
+    const cached = loadPersistedToken();
+    if(cached){
+      accessToken = cached.accessToken;
+      tokenExpiry = cached.tokenExpiry;
+      setConnected(true);
+      ensureTokenClientReady(); // still get this ready in the background for when the token eventually expires
+      routeHome();
+      return;
+    }
     ensureTokenClientReady(); // keeps trying quietly in the background regardless of connectivity
     if(!navigator.onLine){
       // No point waiting on a network call that can't succeed — let the
@@ -876,6 +906,7 @@
       if(resp.error){ revealManualSignIn(); return; }
       accessToken = resp.access_token;
       tokenExpiry = Date.now() + (resp.expires_in ? resp.expires_in*1000 : 3000*1000) - 60000;
+      persistToken();
       setConnected(true);
       routeHome();
     };
@@ -896,6 +927,7 @@
         if(resp.error) return; // stay quiet — a manual sign-in still works if they navigate there
         accessToken = resp.access_token;
         tokenExpiry = Date.now() + (resp.expires_in ? resp.expires_in*1000 : 3000*1000) - 60000;
+        persistToken();
         setConnected(true);
         toast("Back online — reconnected to Drive", "good");
       };
@@ -915,6 +947,7 @@
     if(!confirm("Sign out of this Google account on this device and choose a different one?")) return;
     accessToken = null;
     tokenExpiry = 0;
+    clearPersistedToken();
     setConnected(false);
     revealManualSignIn();
     show("screen-signin");
@@ -941,6 +974,7 @@
         if(resp.error){ reject(new Error(resp.error)); return; }
         accessToken = resp.access_token;
         tokenExpiry = Date.now() + (resp.expires_in ? resp.expires_in*1000 : 3000*1000) - 60000;
+        persistToken();
         setConnected(true);
         resolve(accessToken);
       };
